@@ -1,0 +1,155 @@
+import { Bot, type Context, InlineKeyboard } from "grammy";
+import type { UserFromGetMe } from "grammy/types";
+import { clientLink, config, webAppUrl } from "./config.js";
+import { db } from "./db.js";
+import { esc } from "./format.js";
+import * as store from "./store.js";
+import { UserError } from "./store.js";
+
+let bot: Bot | null = null;
+
+/** Бот без запроса getMe на холодном старте: id берём из токена, username — из env. */
+export function getBot(): Bot {
+  if (bot) return bot;
+  const botInfo = {
+    id: Number(config.botToken.split(":")[0]),
+    is_bot: true,
+    first_name: config.botUsername,
+    username: config.botUsername,
+    can_join_groups: false,
+    can_read_all_group_messages: false,
+    supports_inline_queries: false,
+    can_connect_to_business: false,
+    has_main_web_app: Boolean(config.botAppName),
+  } as UserFromGetMe;
+  bot = new Bot(config.botToken, { botInfo });
+  register(bot);
+  return bot;
+}
+
+const isSuper = (id: number) => config.superadmins.includes(id);
+
+async function showBusiness(ctx: Context, b: store.Business) {
+  const s = b.settings;
+  const kb = new InlineKeyboard()
+    .webApp(`📅 Записаться онлайн`, webAppUrl({ b: b.slug }))
+    .row()
+    .webApp("🗂 Мои записи", webAppUrl({ b: b.slug, view: "my" }));
+  const lines = [`${esc(s.emoji)} <b>${esc(b.name)}</b>`, "", esc(s.welcome)];
+  if (s.address) lines.push("", `📍 ${esc(s.address)}`);
+  if (s.contactPhone) lines.push(`📞 ${esc(s.contactPhone)}`);
+  await ctx.reply(lines.join("\n"), { parse_mode: "HTML", reply_markup: kb, link_preview_options: { is_disabled: true } });
+  await ctx.api
+    .setChatMenuButton({ chat_id: ctx.chat!.id, menu_button: { type: "web_app", text: "Записаться", web_app: { url: webAppUrl({ b: b.slug }) } } })
+    .catch(() => {});
+}
+
+async function showPlatform(ctx: Context) {
+  const uid = ctx.from!.id;
+  const adminOf = await store.businessesOfAdmin(db(), uid);
+  const kb = new InlineKeyboard();
+  for (const b of adminOf.slice(0, 5)) kb.webApp(`⚙️ ${b.name}`, webAppUrl({ b: b.slug, view: "admin" })).row();
+  if (isSuper(uid)) kb.webApp("👑 Панель платформы", webAppUrl({ view: "super" })).row();
+  kb.webApp("🚀 Подключить свой бизнес", webAppUrl({ view: "onboard" }));
+  const text = adminOf.length
+    ? "Ваши бизнесы — выберите, чтобы открыть панель управления:"
+    : [
+        "👋 <b>Онлайн-запись для малого бизнеса — бесплатно</b>",
+        "",
+        "Если вы клиент — откройте ссылку вашего мастера, и здесь появится запись к нему.",
+        "",
+        "Если вы мастер или предприниматель — подключите свой бизнес за минуту: услуги, график, напоминания клиентам, рассылки.",
+      ].join("\n");
+  await ctx.reply(text, { parse_mode: "HTML", reply_markup: kb });
+}
+
+function register(b: Bot) {
+  b.use(async (ctx, next) => {
+    if (ctx.from && !ctx.from.is_bot) await store.upsertUser(db(), ctx.from);
+    await next();
+  });
+
+  b.command("start", async (ctx) => {
+    const payload = (ctx.match ?? "").trim();
+    const uid = ctx.from!.id;
+
+    if (payload.startsWith("inv_")) {
+      try {
+        const { business, role } = await store.claimInvite(db(), payload.slice(4), uid);
+        await store.setLastBusiness(db(), uid, business.id);
+        const kb = new InlineKeyboard().webApp("⚙️ Открыть панель управления", webAppUrl({ b: business.slug, view: "admin" }));
+        await ctx.reply(
+          [
+            `🎉 <b>Готово!</b> Вы ${role === "owner" ? "владелец" : "администратор"} «${esc(business.name)}».`,
+            "",
+            "В панели можно поменять услуги, цены, график и тексты. Ссылка для клиентов — её можно поставить в шапку канала, Instagram и в ответы клиентам:",
+            esc(clientLink(business.slug)),
+          ].join("\n"),
+          { parse_mode: "HTML", reply_markup: kb, link_preview_options: { is_disabled: true } },
+        );
+        if (role === "owner") {
+          const { notifySuperadmins } = await import("./notify.js");
+          await notifySuperadmins(
+            `✅ Приглашение принято: «${esc(business.name)}» → <a href="tg://user?id=${uid}">${esc(ctx.from!.first_name)}</a>`,
+          );
+        }
+      } catch (e) {
+        await ctx.reply(e instanceof UserError ? `⚠️ ${e.message}` : "⚠️ Не удалось принять приглашение");
+      }
+      return;
+    }
+
+    if (payload) {
+      const business = await store.getBusiness(db(), payload);
+      if (business && business.status === "active") {
+        await store.setLastBusiness(db(), uid, business.id);
+        const role = await store.roleFor(db(), uid, business.id, config.superadmins);
+        if (!role) await store.touchClient(db(), business.id, ctx.from!);
+        return showBusiness(ctx, business);
+      }
+      if (business) return ctx.reply("Запись в этот бизнес временно недоступна.");
+    }
+
+    const [u] = await db().query(`select last_business_id from users where tg_id = $1`, [uid]);
+    if (u?.last_business_id && !payload) {
+      const business = await store.getBusiness(db(), Number(u.last_business_id));
+      if (business?.status === "active") return showBusiness(ctx, business);
+    }
+    return showPlatform(ctx);
+  });
+
+  b.command("admin", (ctx) => showPlatform(ctx));
+
+  b.command("help", (ctx) =>
+    ctx.reply(
+      "Запись, отмена и перенос — в приложении (кнопка «Записаться» внизу).\n/start — главное меню\n/admin — панель для владельцев бизнеса",
+    ),
+  );
+
+  // Любое другое сообщение: подсказываем контакты бизнеса и кнопку записи
+  b.on("message", async (ctx) => {
+    const [u] = await db().query(`select last_business_id from users where tg_id = $1`, [ctx.from.id]);
+    const business = u?.last_business_id ? await store.getBusiness(db(), Number(u.last_business_id)) : null;
+    if (!business) return showPlatform(ctx);
+    const s = business.settings;
+    const contacts = [s.contactPhone && `📞 ${esc(s.contactPhone)}`, ...s.links.map((l) => `🔗 <a href="${esc(l.url)}">${esc(l.title)}</a>`)]
+      .filter(Boolean)
+      .join("\n");
+    await ctx.reply(
+      `Я бот онлайн-записи «${esc(business.name)}» и не читаю переписку 🙂${contacts ? `\nСвязаться напрямую:\n${contacts}` : ""}`,
+      {
+        parse_mode: "HTML",
+        reply_markup: new InlineKeyboard().webApp("📅 Записаться", webAppUrl({ b: business.slug })),
+        link_preview_options: { is_disabled: true },
+      },
+    );
+  });
+
+  b.on("my_chat_member", async (ctx) => {
+    if (ctx.myChatMember.new_chat_member.status === "kicked") {
+      await db().query(`update clients set blocked_bot = true where tg_id = $1`, [ctx.from.id]);
+    }
+  });
+
+  b.catch((err) => console.error("bot error", err.error));
+}
