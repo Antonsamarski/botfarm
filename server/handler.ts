@@ -1,7 +1,7 @@
 import { webhookCallback } from "grammy";
 import { AuthError, verifyInitData } from "./auth.js";
 import { getBot } from "./bot.js";
-import { config, webAppUrl } from "./config.js";
+import { config, runtime, webAppUrl } from "./config.js";
 import { db } from "./db.js";
 import { runReminders } from "./cron.js";
 import { dispatch } from "./rpc.js";
@@ -14,9 +14,37 @@ const json = (data: unknown, status = 200, headers: Record<string, string> = {})
 let webhook: ((req: Request) => Promise<Response>) | null = null;
 
 function cronAuthorized(req: Request, url: URL): boolean {
+  // Vercel Cron без CRON_SECRET в окружении шлёт запрос без авторизации; напоминания идемпотентны, лишний вызов безвреден
+  if ((req.headers.get("user-agent") ?? "").startsWith("vercel-cron/")) return true;
   const secret = config.cronSecret;
   if (!secret) return false;
   return req.headers.get("authorization") === `Bearer ${secret}` || url.searchParams.get("key") === secret;
+}
+
+let platformLoadedAt = 0;
+let webhookEnsured = false;
+
+/** Раз в минуту: суперадмины из базы и юзернейм бота; на продакшене — самонастройка вебхука. */
+async function refreshPlatform(force = false) {
+  if (!force && Date.now() - platformLoadedAt < 60_000) return;
+  platformLoadedAt = Date.now();
+  try {
+    const rows = await db().query<{ tg_id: number }>(`select tg_id from platform_admins`);
+    runtime.dbSuperadmins = rows.map((r) => Number(r.tg_id));
+  } catch (e) {
+    console.error("platform_admins", e);
+  }
+  if (!config.botToken) return;
+  try {
+    if (!runtime.botUsername) runtime.botUsername = (await rawApi().getMe()).username;
+    if (config.isProduction && !webhookEnsured) {
+      const info = await rawApi().getWebhookInfo();
+      if (info.url !== `${config.publicUrl}/api/bot`) await setupBot();
+      webhookEnsured = true;
+    }
+  } catch (e) {
+    console.error("bot setup", e);
+  }
 }
 
 async function rpc(req: Request): Promise<Response> {
@@ -51,8 +79,8 @@ async function photo(url: URL): Promise<Response> {
   });
 }
 
-/** Одноразовая настройка: вебхук, команды, кнопка меню, описание. */
-async function setup(): Promise<Response> {
+/** Настройка бота: вебхук, команды, кнопка меню, описание. */
+async function setupBot() {
   const api = rawApi();
   const base = config.publicUrl;
   await api.setWebhook(`${base}/api/bot`, {
@@ -70,13 +98,30 @@ async function setup(): Promise<Response> {
   await api.setMyDescription(
     "Записывайтесь к мастеру в пару касаний: выбор услуги, удобное время, напоминания. Предпринимателям — бесплатная онлайн-запись для бизнеса.",
   );
-  const info = await api.getWebhookInfo();
-  return json({ ok: true, webhook: info.url, pending: info.pending_update_count });
+}
+
+async function status(): Promise<Response> {
+  try {
+    await db().query("select 1");
+  } catch (e: any) {
+    return json({ ok: false, db: false, error: String(e?.message ?? e).replace(/postgres(ql)?:\/\/[^\s]+/g, "<url>") }, 500);
+  }
+  const info = config.botToken ? await rawApi().getWebhookInfo() : null;
+  return json({
+    ok: true,
+    db: true,
+    bot: config.botUsername || null,
+    webhook: info?.url ?? null,
+    pending: info?.pending_update_count ?? null,
+    lastError: info?.last_error_message ?? null,
+    superadmins: config.superadmins.length,
+  });
 }
 
 export async function handle(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const route = url.searchParams.get("route") || url.pathname.replace(/^\/api\/?/, "");
+  if (route !== "photo" && process.env.DATABASE_URL !== undefined) await refreshPlatform(route === "health");
 
   switch (route) {
     case "rpc":
@@ -95,10 +140,10 @@ export async function handle(req: Request): Promise<Response> {
       return json(await runReminders());
     case "setup":
       if (!cronAuthorized(req, url)) return new Response("forbidden", { status: 403 });
-      return setup();
+      await setupBot();
+      return status();
     case "health":
-      await db().query("select 1");
-      return json({ ok: true });
+      return status();
     default:
       return json({ error: "not found" }, 404);
   }

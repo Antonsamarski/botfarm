@@ -131,6 +131,12 @@ create table if not exists portfolio (
 );
 create index if not exists portfolio_business on portfolio(business_id, sort);
 
+-- владельцы платформы (суперадмины) в дополнение к SUPERADMIN_IDS
+create table if not exists platform_admins (
+  tg_id bigint primary key,
+  note  text not null default ''
+);
+
 -- Доступ к таблицам только с сервера (роль postgres). Публичный REST Supabase закрыт:
 alter table users enable row level security;
 alter table businesses enable row level security;
@@ -142,3 +148,4 @@ alter table time_off enable row level security;
 alter table bookings enable row level security;
 alter table clients enable row level security;
 alter table portfolio enable row level security;
+alter table platform_admins enable row level security;

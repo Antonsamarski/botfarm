@@ -14,6 +14,7 @@ var __export = (target, all) => {
 };
 
 // server/config.ts
+import { createHmac as createHmac2 } from "node:crypto";
 function clientLink(slug) {
   return config.botAppName ? `https://t.me/${config.botUsername}/${config.botAppName}?startapp=${slug}` : `https://t.me/${config.botUsername}?start=${slug}`;
 }
@@ -24,24 +25,27 @@ function webAppUrl(params = {}) {
   const s = q.toString();
   return `${config.publicUrl}/${s ? `?${s}` : ""}`;
 }
-var env, config, inviteLink;
+var env, runtime, derived, config, inviteLink;
 var init_config = __esm({
   "server/config.ts"() {
     "use strict";
     env = (k, d = "") => (process.env[k] ?? d).trim();
+    runtime = { botUsername: "", dbSuperadmins: [] };
+    derived = (purpose) => config.botToken ? createHmac2("sha256", config.botToken).update(purpose).digest("base64url").slice(0, 40) : "";
     config = {
       get botToken() {
         return env("BOT_TOKEN");
       },
       get botUsername() {
-        return env("BOT_USERNAME").replace(/^@/, "");
+        return (env("BOT_USERNAME") || runtime.botUsername).replace(/^@/, "");
       },
       /** Короткое имя Mini App из BotFather (/newapp). Необязательно. */
       get botAppName() {
         return env("BOT_APP_NAME");
       },
       get superadmins() {
-        return env("SUPERADMIN_IDS").split(/[,\s]+/).filter(Boolean).map(Number).filter((n) => Number.isFinite(n) && n > 0);
+        const fromEnv = env("SUPERADMIN_IDS").split(/[,\s]+/).filter(Boolean).map(Number).filter((n) => Number.isFinite(n) && n > 0);
+        return [.../* @__PURE__ */ new Set([...fromEnv, ...runtime.dbSuperadmins])];
       },
       /** Адрес сайта: https://xxx.vercel.app */
       get publicUrl() {
@@ -51,10 +55,13 @@ var init_config = __esm({
         return v ? `https://${v}` : "http://localhost:5173";
       },
       get webhookSecret() {
-        return env("WEBHOOK_SECRET");
+        return env("WEBHOOK_SECRET") || derived("webhook");
       },
       get cronSecret() {
-        return env("CRON_SECRET");
+        return env("CRON_SECRET") || derived("cron");
+      },
+      get isProduction() {
+        return env("VERCEL_ENV") === "production";
       }
     };
     inviteLink = (code) => `https://t.me/${config.botUsername}?start=inv_${code}`;
@@ -854,10 +861,10 @@ var bookingsInRange = (db2, businessId, from, to) => db2.query(
      where b.business_id = $1 and b.starts_at >= $2 and b.starts_at < $3 order by b.starts_at`,
   [businessId, from, to]
 );
-async function setBookingStatus(db2, businessId, id, status) {
+async function setBookingStatus(db2, businessId, id, status2) {
   const [row] = await db2.query(
     `update bookings set status = $3 where id = $1 and business_id = $2 and status <> 'cancelled' returning *`,
-    [id, businessId, status]
+    [id, businessId, status2]
   );
   if (!row) throw new UserError("\u0417\u0430\u043F\u0438\u0441\u044C \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u0430");
   return row;
@@ -1171,13 +1178,13 @@ async function book(ctx, p) {
 async function myBookings(ctx, p) {
   const b = await requireBusiness(p.businessId);
   const rows = await clientBookings(db(), b.id, ctx.init.user.id);
-  return rows.map(({ id, service_title, price, starts_at, ends_at, status, cancelled_by }) => ({
+  return rows.map(({ id, service_title, price, starts_at, ends_at, status: status2, cancelled_by }) => ({
     id,
     service_title,
     price,
     starts_at,
     ends_at,
-    status,
+    status: status2,
     cancelled_by
   }));
 }
@@ -1244,9 +1251,9 @@ async function adminCancelBooking(ctx, p) {
   return { ok: true };
 }
 async function adminSetStatus(ctx, p) {
-  const status = str(p.status, 20);
-  if (!["done", "no_show", "confirmed"].includes(status)) throw new UserError("\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u044B\u0439 \u0441\u0442\u0430\u0442\u0443\u0441");
-  await setBookingStatus(db(), ctx.business.id, int(p.bookingId, "bookingId"), status);
+  const status2 = str(p.status, 20);
+  if (!["done", "no_show", "confirmed"].includes(status2)) throw new UserError("\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u044B\u0439 \u0441\u0442\u0430\u0442\u0443\u0441");
+  await setBookingStatus(db(), ctx.business.id, int(p.bookingId, "bookingId"), status2);
   return { ok: true };
 }
 async function saveService(ctx, p) {
@@ -1495,8 +1502,8 @@ async function superCreate(ctx, p) {
   return { business: publicBusiness(b), links: links(b), ownerInvite: inviteLink(code) };
 }
 async function superSetStatus(_ctx, p) {
-  const status = p.status === "blocked" ? "blocked" : "active";
-  await db().query(`update businesses set status = $2 where id = $1`, [int(p.businessId, "businessId"), status]);
+  const status2 = p.status === "blocked" ? "blocked" : "active";
+  await db().query(`update businesses set status = $2 where id = $1`, [int(p.businessId, "businessId"), status2]);
   return { ok: true };
 }
 async function superDelete(_ctx, p) {
@@ -1556,12 +1563,36 @@ async function dispatch(method, params, ctx) {
 
 // server/handler.ts
 init_telegram();
-var json = (data, status = 200, headers = {}) => new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8", ...headers } });
+var json = (data, status2 = 200, headers = {}) => new Response(JSON.stringify(data), { status: status2, headers: { "content-type": "application/json; charset=utf-8", ...headers } });
 var webhook = null;
 function cronAuthorized(req, url) {
+  if ((req.headers.get("user-agent") ?? "").startsWith("vercel-cron/")) return true;
   const secret = config.cronSecret;
   if (!secret) return false;
   return req.headers.get("authorization") === `Bearer ${secret}` || url.searchParams.get("key") === secret;
+}
+var platformLoadedAt = 0;
+var webhookEnsured = false;
+async function refreshPlatform(force = false) {
+  if (!force && Date.now() - platformLoadedAt < 6e4) return;
+  platformLoadedAt = Date.now();
+  try {
+    const rows = await db().query(`select tg_id from platform_admins`);
+    runtime.dbSuperadmins = rows.map((r) => Number(r.tg_id));
+  } catch (e) {
+    console.error("platform_admins", e);
+  }
+  if (!config.botToken) return;
+  try {
+    if (!runtime.botUsername) runtime.botUsername = (await rawApi().getMe()).username;
+    if (config.isProduction && !webhookEnsured) {
+      const info = await rawApi().getWebhookInfo();
+      if (info.url !== `${config.publicUrl}/api/bot`) await setupBot();
+      webhookEnsured = true;
+    }
+  } catch (e) {
+    console.error("bot setup", e);
+  }
 }
 async function rpc(req) {
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
@@ -1592,7 +1623,7 @@ async function photo(url) {
     }
   });
 }
-async function setup() {
+async function setupBot() {
   const api2 = rawApi();
   const base = config.publicUrl;
   await api2.setWebhook(`${base}/api/bot`, {
@@ -1610,12 +1641,28 @@ async function setup() {
   await api2.setMyDescription(
     "\u0417\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u0439\u0442\u0435\u0441\u044C \u043A \u043C\u0430\u0441\u0442\u0435\u0440\u0443 \u0432 \u043F\u0430\u0440\u0443 \u043A\u0430\u0441\u0430\u043D\u0438\u0439: \u0432\u044B\u0431\u043E\u0440 \u0443\u0441\u043B\u0443\u0433\u0438, \u0443\u0434\u043E\u0431\u043D\u043E\u0435 \u0432\u0440\u0435\u043C\u044F, \u043D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u044F. \u041F\u0440\u0435\u0434\u043F\u0440\u0438\u043D\u0438\u043C\u0430\u0442\u0435\u043B\u044F\u043C \u2014 \u0431\u0435\u0441\u043F\u043B\u0430\u0442\u043D\u0430\u044F \u043E\u043D\u043B\u0430\u0439\u043D-\u0437\u0430\u043F\u0438\u0441\u044C \u0434\u043B\u044F \u0431\u0438\u0437\u043D\u0435\u0441\u0430."
   );
-  const info = await api2.getWebhookInfo();
-  return json({ ok: true, webhook: info.url, pending: info.pending_update_count });
+}
+async function status() {
+  try {
+    await db().query("select 1");
+  } catch (e) {
+    return json({ ok: false, db: false, error: String(e?.message ?? e).replace(/postgres(ql)?:\/\/[^\s]+/g, "<url>") }, 500);
+  }
+  const info = config.botToken ? await rawApi().getWebhookInfo() : null;
+  return json({
+    ok: true,
+    db: true,
+    bot: config.botUsername || null,
+    webhook: info?.url ?? null,
+    pending: info?.pending_update_count ?? null,
+    lastError: info?.last_error_message ?? null,
+    superadmins: config.superadmins.length
+  });
 }
 async function handle(req) {
   const url = new URL(req.url);
   const route = url.searchParams.get("route") || url.pathname.replace(/^\/api\/?/, "");
+  if (route !== "photo" && process.env.DATABASE_URL !== void 0) await refreshPlatform(route === "health");
   switch (route) {
     case "rpc":
       return rpc(req);
@@ -1633,10 +1680,10 @@ async function handle(req) {
       return json(await runReminders());
     case "setup":
       if (!cronAuthorized(req, url)) return new Response("forbidden", { status: 403 });
-      return setup();
+      await setupBot();
+      return status();
     case "health":
-      await db().query("select 1");
-      return json({ ok: true });
+      return status();
     default:
       return json({ error: "not found" }, 404);
   }

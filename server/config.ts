@@ -1,22 +1,32 @@
+import { createHmac } from "node:crypto";
+
 const env = (k: string, d = "") => (process.env[k] ?? d).trim();
+
+/** Данные, подгружаемые на лету: юзернейм бота из getMe и суперадмины из таблицы platform_admins. */
+export const runtime = { botUsername: "", dbSuperadmins: [] as number[] };
+
+/** Секрет, производный от токена бота, — чтобы не заводить лишних переменных окружения. */
+const derived = (purpose: string) =>
+  config.botToken ? createHmac("sha256", config.botToken).update(purpose).digest("base64url").slice(0, 40) : "";
 
 export const config = {
   get botToken() {
     return env("BOT_TOKEN");
   },
   get botUsername() {
-    return env("BOT_USERNAME").replace(/^@/, "");
+    return (env("BOT_USERNAME") || runtime.botUsername).replace(/^@/, "");
   },
   /** Короткое имя Mini App из BotFather (/newapp). Необязательно. */
   get botAppName() {
     return env("BOT_APP_NAME");
   },
   get superadmins(): number[] {
-    return env("SUPERADMIN_IDS")
+    const fromEnv = env("SUPERADMIN_IDS")
       .split(/[,\s]+/)
       .filter(Boolean)
       .map(Number)
       .filter((n) => Number.isFinite(n) && n > 0);
+    return [...new Set([...fromEnv, ...runtime.dbSuperadmins])];
   },
   /** Адрес сайта: https://xxx.vercel.app */
   get publicUrl() {
@@ -26,10 +36,13 @@ export const config = {
     return v ? `https://${v}` : "http://localhost:5173";
   },
   get webhookSecret() {
-    return env("WEBHOOK_SECRET");
+    return env("WEBHOOK_SECRET") || derived("webhook");
   },
   get cronSecret() {
-    return env("CRON_SECRET");
+    return env("CRON_SECRET") || derived("cron");
+  },
+  get isProduction() {
+    return env("VERCEL_ENV") === "production";
   },
 };
 
