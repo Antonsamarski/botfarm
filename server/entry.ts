@@ -1,4 +1,4 @@
-import { handle } from "../server/handler.js";
+import { handle } from "./handler.js";
 
 // Одна функция на всё API: Vercel Fluid переиспользует тёплые экземпляры между маршрутами.
 export default {

@@ -7,7 +7,8 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
-    "local": "tsx dev/local-server.ts"
+    "local": "tsx dev/local-server.ts",
+    "build:api": "esbuild server/entry.ts --bundle --platform=node --target=node22 --format=esm --packages=external --outfile=api/index.mjs"
   },
   "dependencies": {
     "grammy": "^1.46.0",
@@ -26,9 +27,13 @@
     "@types/react-dom": "^19.3.0",
     "@vercel/node": "^26.0.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "esbuild": "^0.28.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^8.3.5",
     "vitest": "^5.0.5"
+  },
+  "engines": {
+    "node": "22.x"
   }
 }
