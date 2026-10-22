@@ -3,7 +3,10 @@ import { createHmac } from "node:crypto";
 const env = (k: string, d = "") => (process.env[k] ?? d).trim();
 
 /** Данные, подгружаемые на лету: юзернейм бота из getMe и суперадмины из таблицы platform_admins. */
-export const runtime = { botUsername: "", dbSuperadmins: [] as number[] };
+export const runtime = { botUsername: "", dbSuperadmins: [] as number[], requestHost: "" };
+
+/** Боевой адрес на Vercel, если системные переменные недоступны. */
+const DEFAULT_PUBLIC_URL = "https://botfarm-zapis.vercel.app";
 
 /** Секрет, производный от токена бота, — чтобы не заводить лишних переменных окружения. */
 const derived = (purpose: string) =>
@@ -33,7 +36,9 @@ export const config = {
     const explicit = env("PUBLIC_URL");
     if (explicit) return explicit.replace(/\/$/, "");
     const v = env("VERCEL_PROJECT_PRODUCTION_URL");
-    return v ? `https://${v}` : "http://localhost:5173";
+    if (v) return `https://${v}`;
+    const onVercel = env("VERCEL") || env("VERCEL_ENV") || runtime.requestHost.endsWith(".vercel.app");
+    return onVercel ? DEFAULT_PUBLIC_URL : "http://localhost:5173";
   },
   get webhookSecret() {
     return env("WEBHOOK_SECRET") || derived("webhook");
@@ -42,7 +47,8 @@ export const config = {
     return env("CRON_SECRET") || derived("cron");
   },
   get isProduction() {
-    return env("VERCEL_ENV") === "production";
+    if (env("VERCEL_ENV")) return env("VERCEL_ENV") === "production";
+    return runtime.requestHost !== "" && `https://${runtime.requestHost}` === config.publicUrl;
   },
 };
 

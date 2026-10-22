@@ -120,6 +120,7 @@ async function status(): Promise<Response> {
 
 export async function handle(req: Request): Promise<Response> {
   const url = new URL(req.url);
+  runtime.requestHost = req.headers.get("x-forwarded-host") ?? url.host;
   const route = url.searchParams.get("route") || url.pathname.replace(/^\/api\/?/, "");
   if (route !== "photo" && process.env.DATABASE_URL !== undefined) await refreshPlatform(route === "health");
 

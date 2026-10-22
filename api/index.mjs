@@ -25,12 +25,13 @@ function webAppUrl(params = {}) {
   const s = q.toString();
   return `${config.publicUrl}/${s ? `?${s}` : ""}`;
 }
-var env, runtime, derived, config, inviteLink;
+var env, runtime, DEFAULT_PUBLIC_URL, derived, config, inviteLink;
 var init_config = __esm({
   "server/config.ts"() {
     "use strict";
     env = (k, d = "") => (process.env[k] ?? d).trim();
-    runtime = { botUsername: "", dbSuperadmins: [] };
+    runtime = { botUsername: "", dbSuperadmins: [], requestHost: "" };
+    DEFAULT_PUBLIC_URL = "https://botfarm-zapis.vercel.app";
     derived = (purpose) => config.botToken ? createHmac2("sha256", config.botToken).update(purpose).digest("base64url").slice(0, 40) : "";
     config = {
       get botToken() {
@@ -52,7 +53,9 @@ var init_config = __esm({
         const explicit = env("PUBLIC_URL");
         if (explicit) return explicit.replace(/\/$/, "");
         const v = env("VERCEL_PROJECT_PRODUCTION_URL");
-        return v ? `https://${v}` : "http://localhost:5173";
+        if (v) return `https://${v}`;
+        const onVercel = env("VERCEL") || env("VERCEL_ENV") || runtime.requestHost.endsWith(".vercel.app");
+        return onVercel ? DEFAULT_PUBLIC_URL : "http://localhost:5173";
       },
       get webhookSecret() {
         return env("WEBHOOK_SECRET") || derived("webhook");
@@ -61,7 +64,8 @@ var init_config = __esm({
         return env("CRON_SECRET") || derived("cron");
       },
       get isProduction() {
-        return env("VERCEL_ENV") === "production";
+        if (env("VERCEL_ENV")) return env("VERCEL_ENV") === "production";
+        return runtime.requestHost !== "" && `https://${runtime.requestHost}` === config.publicUrl;
       }
     };
     inviteLink = (code) => `https://t.me/${config.botUsername}?start=inv_${code}`;
@@ -1661,6 +1665,7 @@ async function status() {
 }
 async function handle(req) {
   const url = new URL(req.url);
+  runtime.requestHost = req.headers.get("x-forwarded-host") ?? url.host;
   const route = url.searchParams.get("route") || url.pathname.replace(/^\/api\/?/, "");
   if (route !== "photo" && process.env.DATABASE_URL !== void 0) await refreshPlatform(route === "health");
   switch (route) {
