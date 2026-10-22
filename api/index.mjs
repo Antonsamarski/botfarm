@@ -1591,7 +1591,7 @@ async function refreshPlatform(force = false) {
     if (!runtime.botUsername) runtime.botUsername = (await rawApi().getMe()).username;
     if (config.isProduction && !webhookEnsured) {
       const info = await rawApi().getWebhookInfo();
-      if (info.url !== `${config.publicUrl}/api/bot`) await setupBot();
+      if (info.url !== webhookUrl()) await setupBot();
       webhookEnsured = true;
     }
   } catch (e) {
@@ -1627,13 +1627,12 @@ async function photo(url) {
     }
   });
 }
+var webhookUrl = () => `${config.publicUrl}/api/bot?v=${config.webhookSecret.slice(0, 8)}`;
 async function setupBot() {
   const api2 = rawApi();
-  const base = config.publicUrl;
-  await api2.setWebhook(`${base}/api/bot`, {
+  await api2.setWebhook(webhookUrl(), {
     secret_token: config.webhookSecret || void 0,
-    allowed_updates: ["message", "my_chat_member"],
-    drop_pending_updates: true
+    allowed_updates: ["message", "my_chat_member"]
   });
   await api2.setMyCommands([
     { command: "start", description: "\u0413\u043B\u0430\u0432\u043D\u043E\u0435 \u043C\u0435\u043D\u044E" },

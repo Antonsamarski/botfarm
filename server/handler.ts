@@ -39,7 +39,7 @@ async function refreshPlatform(force = false) {
     if (!runtime.botUsername) runtime.botUsername = (await rawApi().getMe()).username;
     if (config.isProduction && !webhookEnsured) {
       const info = await rawApi().getWebhookInfo();
-      if (info.url !== `${config.publicUrl}/api/bot`) await setupBot();
+      if (info.url !== webhookUrl()) await setupBot();
       webhookEnsured = true;
     }
   } catch (e) {
@@ -79,14 +79,15 @@ async function photo(url: URL): Promise<Response> {
   });
 }
 
+/** В адресе вебхука — метка секрета: после перевыпуска токена адрес не совпадёт, и бот перенастроится сам. */
+const webhookUrl = () => `${config.publicUrl}/api/bot?v=${config.webhookSecret.slice(0, 8)}`;
+
 /** Настройка бота: вебхук, команды, кнопка меню, описание. */
 async function setupBot() {
   const api = rawApi();
-  const base = config.publicUrl;
-  await api.setWebhook(`${base}/api/bot`, {
+  await api.setWebhook(webhookUrl(), {
     secret_token: config.webhookSecret || undefined,
     allowed_updates: ["message", "my_chat_member"],
-    drop_pending_updates: true,
   });
   await api.setMyCommands([
     { command: "start", description: "Главное меню" },
