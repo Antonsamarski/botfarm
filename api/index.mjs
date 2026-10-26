@@ -15,6 +15,12 @@ var __export = (target, all) => {
 
 // server/config.ts
 import { createHmac as createHmac2 } from "node:crypto";
+function isProductionHost(host) {
+  if (!/^[a-z0-9-]+\.vercel\.app$/.test(host)) return false;
+  const name = host.replace(/\.vercel\.app$/, "");
+  if (name.includes("-git-")) return false;
+  return !/-[a-z0-9]{9}-/.test(`${name}-`);
+}
 function clientLink(slug) {
   return config.botAppName ? `https://t.me/${config.botUsername}/${config.botAppName}?startapp=${slug}` : `https://t.me/${config.botUsername}?start=${slug}`;
 }
@@ -25,13 +31,12 @@ function webAppUrl(params = {}) {
   const s = q.toString();
   return `${config.publicUrl}/${s ? `?${s}` : ""}`;
 }
-var env, runtime, DEFAULT_PUBLIC_URL, derived, config, inviteLink;
+var env, runtime, derived, config, inviteLink;
 var init_config = __esm({
   "server/config.ts"() {
     "use strict";
     env = (k, d = "") => (process.env[k] ?? d).trim();
     runtime = { botUsername: "", dbSuperadmins: [], requestHost: "" };
-    DEFAULT_PUBLIC_URL = "https://botfarm-zapis.vercel.app";
     derived = (purpose) => config.botToken ? createHmac2("sha256", config.botToken).update(purpose).digest("base64url").slice(0, 40) : "";
     config = {
       get botToken() {
@@ -54,8 +59,8 @@ var init_config = __esm({
         if (explicit) return explicit.replace(/\/$/, "");
         const v = env("VERCEL_PROJECT_PRODUCTION_URL");
         if (v) return `https://${v}`;
-        const onVercel = env("VERCEL") || env("VERCEL_ENV") || runtime.requestHost.endsWith(".vercel.app");
-        return onVercel ? DEFAULT_PUBLIC_URL : "http://localhost:5173";
+        if (isProductionHost(runtime.requestHost)) return `https://${runtime.requestHost}`;
+        return "http://localhost:5173";
       },
       get webhookSecret() {
         return env("WEBHOOK_SECRET") || derived("webhook");
@@ -65,7 +70,7 @@ var init_config = __esm({
       },
       get isProduction() {
         if (env("VERCEL_ENV")) return env("VERCEL_ENV") === "production";
-        return runtime.requestHost !== "" && `https://${runtime.requestHost}` === config.publicUrl;
+        return isProductionHost(runtime.requestHost) && `https://${runtime.requestHost}` === config.publicUrl;
       }
     };
     inviteLink = (code) => `https://t.me/${config.botUsername}?start=inv_${code}`;
@@ -302,13 +307,179 @@ import { Bot, InlineKeyboard } from "grammy";
 
 // server/db.ts
 import postgres from "postgres";
+
+// server/schema.gen.ts
+var SCHEMA_SQL = `-- BotFarm: \u0441\u0445\u0435\u043C\u0430. \u0412\u044B\u043F\u043E\u043B\u043D\u044F\u0435\u0442\u0441\u044F \u043E\u0434\u0438\u043D \u0440\u0430\u0437 \u0432 \u043D\u043E\u0432\u043E\u043C \u043F\u0440\u043E\u0435\u043A\u0442\u0435 Supabase.
+create extension if not exists btree_gist;
+
+create table if not exists users (
+  tg_id            bigint primary key,
+  first_name       text not null default '',
+  username         text,
+  last_business_id bigint,
+  created_at       timestamptz not null default now(),
+  seen_at          timestamptz not null default now()
+);
+
+create table if not exists businesses (
+  id          bigint generated always as identity primary key,
+  slug        text not null unique check (slug ~ '^[a-z0-9][a-z0-9-]{2,40}$'),
+  name        text not null,
+  template    text not null,
+  status      text not null default 'active' check (status in ('active','blocked')),
+  timezone    text not null default 'Europe/Moscow',
+  -- \u0442\u0435\u043A\u0441\u0442\u044B, \u043A\u043E\u043D\u0442\u0430\u043A\u0442\u044B, \u043F\u0440\u0430\u0432\u0438\u043B\u0430 \u0437\u0430\u043F\u0438\u0441\u0438, \u043F\u043E\u043B\u044F \u0430\u043D\u043A\u0435\u0442\u044B, \u0442\u0435\u0440\u043C\u0438\u043D\u044B, \u0430\u043A\u0446\u0435\u043D\u0442\u043D\u044B\u0439 \u0446\u0432\u0435\u0442
+  settings    jsonb not null default '{}'::jsonb,
+  created_by  bigint,
+  created_at  timestamptz not null default now()
+);
+
+create table if not exists business_admins (
+  business_id bigint not null references businesses(id) on delete cascade,
+  tg_id       bigint not null,
+  role        text not null default 'admin' check (role in ('owner','admin')),
+  created_at  timestamptz not null default now(),
+  primary key (business_id, tg_id)
+);
+create index if not exists business_admins_tg on business_admins(tg_id);
+
+create table if not exists invites (
+  code        text primary key,
+  business_id bigint not null references businesses(id) on delete cascade,
+  role        text not null default 'owner' check (role in ('owner','admin')),
+  created_by  bigint,
+  used_by     bigint,
+  used_at     timestamptz,
+  expires_at  timestamptz not null default now() + interval '30 days'
+);
+
+create table if not exists staff (
+  id          bigint generated always as identity primary key,
+  business_id bigint not null references businesses(id) on delete cascade,
+  name        text not null,
+  description text not null default '',
+  tg_id       bigint,                      -- \u0435\u0441\u043B\u0438 \u043C\u0430\u0441\u0442\u0435\u0440 \u0445\u043E\u0447\u0435\u0442 \u043F\u043E\u043B\u0443\u0447\u0430\u0442\u044C \u0441\u0432\u043E\u0438 \u0437\u0430\u043F\u0438\u0441\u0438
+  work_hours  jsonb not null default '{}'::jsonb, -- {"1":[["10:00","19:00"]],...}
+  active      boolean not null default true,
+  sort        int not null default 0
+);
+create index if not exists staff_business on staff(business_id);
+
+create table if not exists services (
+  id           bigint generated always as identity primary key,
+  business_id  bigint not null references businesses(id) on delete cascade,
+  title        text not null,
+  description  text not null default '',
+  price        int not null default 0 check (price >= 0),
+  price_from   boolean not null default false,  -- \xAB\u043E\u0442 1500 \u20BD\xBB
+  duration_min int not null default 60 check (duration_min between 5 and 720),
+  active       boolean not null default true,
+  sort         int not null default 0
+);
+create index if not exists services_business on services(business_id);
+
+-- \u0437\u0430\u043A\u0440\u044B\u0442\u043E\u0435 \u0432\u0440\u0435\u043C\u044F: \u0432\u044B\u0445\u043E\u0434\u043D\u043E\u0439, \u043E\u0442\u043F\u0443\u0441\u043A, \u043F\u0435\u0440\u0435\u0440\u044B\u0432. staff_id null = \u0434\u043B\u044F \u0432\u0441\u0435\u0445 \u043C\u0430\u0441\u0442\u0435\u0440\u043E\u0432
+create table if not exists time_off (
+  id          bigint generated always as identity primary key,
+  business_id bigint not null references businesses(id) on delete cascade,
+  staff_id    bigint references staff(id) on delete cascade,
+  starts_at   timestamptz not null,
+  ends_at     timestamptz not null check (ends_at > starts_at),
+  reason      text not null default ''
+);
+create index if not exists time_off_lookup on time_off(business_id, starts_at);
+
+create table if not exists bookings (
+  id            bigint generated always as identity primary key,
+  business_id   bigint not null references businesses(id) on delete cascade,
+  staff_id      bigint not null references staff(id) on delete cascade,
+  service_id    bigint references services(id) on delete set null,
+  service_title text not null,
+  price         int not null default 0,
+  client_tg_id  bigint not null,
+  client_name   text not null,
+  client_phone  text not null default '',
+  answers       jsonb not null default '{}'::jsonb,
+  comment       text not null default '',
+  starts_at     timestamptz not null,
+  ends_at       timestamptz not null check (ends_at > starts_at),
+  status        text not null default 'confirmed'
+                check (status in ('confirmed','cancelled','done','no_show')),
+  cancelled_by  text check (cancelled_by in ('client','admin')),
+  reminded_24h  boolean not null default false,
+  reminded_2h   boolean not null default false,
+  created_at    timestamptz not null default now(),
+  -- \u0433\u043B\u0430\u0432\u043D\u043E\u0435: \u0443 \u043E\u0434\u043D\u043E\u0433\u043E \u043C\u0430\u0441\u0442\u0435\u0440\u0430 \u043D\u0435 \u043C\u043E\u0436\u0435\u0442 \u0431\u044B\u0442\u044C \u0434\u0432\u0443\u0445 \u043F\u0435\u0440\u0435\u0441\u0435\u043A\u0430\u044E\u0449\u0438\u0445\u0441\u044F \u0430\u043A\u0442\u0438\u0432\u043D\u044B\u0445 \u0437\u0430\u043F\u0438\u0441\u0435\u0439
+  constraint bookings_no_overlap exclude using gist (
+    staff_id with =,
+    tstzrange(starts_at, ends_at, '[)') with &&
+  ) where (status = 'confirmed')
+);
+create index if not exists bookings_business_time on bookings(business_id, starts_at);
+create index if not exists bookings_client on bookings(client_tg_id, starts_at);
+create index if not exists bookings_reminders on bookings(starts_at) where status = 'confirmed';
+
+-- \u043A\u043B\u0438\u0435\u043D\u0442\u044B \u043A\u043E\u043D\u043A\u0440\u0435\u0442\u043D\u043E\u0433\u043E \u0431\u0438\u0437\u043D\u0435\u0441\u0430: \u0434\u043B\u044F \u0440\u0430\u0441\u0441\u044B\u043B\u043A\u0438 \u0438 \u043C\u0438\u043D\u0438-CRM
+create table if not exists clients (
+  business_id bigint not null references businesses(id) on delete cascade,
+  tg_id       bigint not null,
+  name        text not null default '',
+  phone       text not null default '',
+  note        text not null default '',
+  blocked_bot boolean not null default false,
+  first_seen  timestamptz not null default now(),
+  last_seen   timestamptz not null default now(),
+  primary key (business_id, tg_id)
+);
+
+create table if not exists portfolio (
+  id          bigint generated always as identity primary key,
+  business_id bigint not null references businesses(id) on delete cascade,
+  file_id     text not null,
+  caption     text not null default '',
+  sort        int not null default 0,
+  created_at  timestamptz not null default now()
+);
+create index if not exists portfolio_business on portfolio(business_id, sort);
+
+-- \u0432\u043B\u0430\u0434\u0435\u043B\u044C\u0446\u044B \u043F\u043B\u0430\u0442\u0444\u043E\u0440\u043C\u044B (\u0441\u0443\u043F\u0435\u0440\u0430\u0434\u043C\u0438\u043D\u044B) \u0432 \u0434\u043E\u043F\u043E\u043B\u043D\u0435\u043D\u0438\u0435 \u043A SUPERADMIN_IDS
+create table if not exists platform_admins (
+  tg_id bigint primary key,
+  note  text not null default ''
+);
+
+-- \u0414\u043E\u0441\u0442\u0443\u043F \u043A \u0442\u0430\u0431\u043B\u0438\u0446\u0430\u043C \u0442\u043E\u043B\u044C\u043A\u043E \u0441 \u0441\u0435\u0440\u0432\u0435\u0440\u0430 (\u0440\u043E\u043B\u044C postgres). \u041F\u0443\u0431\u043B\u0438\u0447\u043D\u044B\u0439 REST Supabase \u0437\u0430\u043A\u0440\u044B\u0442:
+alter table users enable row level security;
+alter table businesses enable row level security;
+alter table business_admins enable row level security;
+alter table invites enable row level security;
+alter table staff enable row level security;
+alter table services enable row level security;
+alter table time_off enable row level security;
+alter table bookings enable row level security;
+alter table clients enable row level security;
+alter table portfolio enable row level security;
+alter table platform_admins enable row level security;
+`;
+
+// server/db.ts
 var current = null;
+function resolveDatabaseUrl(env2 = process.env) {
+  const raw = (env2.DATABASE_URL || env2.POSTGRES_URL || "").trim();
+  if (!raw) return null;
+  const u = new URL(raw);
+  const sslmode = u.searchParams.get("sslmode");
+  u.search = "";
+  const ssl = sslmode === "require" || /supabase\.(co|com)$/.test(u.hostname);
+  return { url: u.toString(), ssl };
+}
 function db() {
   if (current) return current;
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL \u043D\u0435 \u0437\u0430\u0434\u0430\u043D");
-  const sql = postgres(url, {
+  const resolved = resolveDatabaseUrl();
+  if (!resolved) throw new Error("\u041D\u0435 \u0437\u0430\u0434\u0430\u043D \u0430\u0434\u0440\u0435\u0441 \u0431\u0430\u0437\u044B: DATABASE_URL \u0438\u043B\u0438 POSTGRES_URL");
+  const sql = postgres(resolved.url, {
     prepare: false,
+    ssl: resolved.ssl ? "require" : void 0,
     max: 3,
     // несколько соединений на тёплый экземпляр; остальное держит пулер Supabase
     idle_timeout: 20,
@@ -317,13 +488,39 @@ function db() {
       bigint: { to: 20, from: [20], serialize: (x) => String(x), parse: (x) => Number(x) }
     }
   });
-  current = wrapPostgres(sql);
+  const ready = ensureSchema(sql).catch((e) => {
+    console.error("ensureSchema", e);
+  });
+  current = wrapPostgres(sql, ready);
   return current;
 }
-function wrapPostgres(sql) {
+var DEFAULT_SUPERADMINS = [
+  [8181483439, "\u0410\u043D\u0442\u043E\u043D"],
+  [2015823821, "\u0414\u043C\u0438\u0442\u0440\u0438\u0439"]
+];
+async function ensureSchema(sql) {
+  const [row] = await sql.unsafe(`select to_regclass('businesses') is not null as ok`);
+  if (row?.ok) return;
+  try {
+    await sql.unsafe(`create extension if not exists btree_gist with schema extensions`);
+  } catch {
+  }
+  await sql.unsafe(SCHEMA_SQL);
+  for (const [id, note] of DEFAULT_SUPERADMINS) {
+    await sql.unsafe(`insert into platform_admins (tg_id, note) values ($1, $2) on conflict do nothing`, [id, note]);
+  }
+  console.log("\u0421\u0445\u0435\u043C\u0430 \u0411\u0414 \u0441\u043E\u0437\u0434\u0430\u043D\u0430");
+}
+function wrapPostgres(sql, ready = Promise.resolve()) {
   return {
-    query: (text, params = []) => sql.unsafe(text, params),
-    tx: (fn) => sql.begin((t) => fn(wrapPostgres(t)))
+    query: async (text, params = []) => {
+      await ready;
+      return sql.unsafe(text, params);
+    },
+    tx: async (fn) => {
+      await ready;
+      return sql.begin((t) => fn(wrapPostgres(t)));
+    }
   };
 }
 function isOverlapError(e) {
@@ -1659,14 +1856,16 @@ async function status() {
     webhook: info?.url ?? null,
     pending: info?.pending_update_count ?? null,
     lastError: info?.last_error_message ?? null,
-    superadmins: config.superadmins.length
+    superadmins: config.superadmins.length,
+    publicUrl: config.publicUrl,
+    production: config.isProduction
   });
 }
 async function handle(req) {
   const url = new URL(req.url);
   runtime.requestHost = req.headers.get("x-forwarded-host") ?? url.host;
   const route = url.searchParams.get("route") || url.pathname.replace(/^\/api\/?/, "");
-  if (route !== "photo" && process.env.DATABASE_URL !== void 0) await refreshPlatform(route === "health");
+  if (route !== "photo" && (process.env.DATABASE_URL || process.env.POSTGRES_URL)) await refreshPlatform(route === "health");
   switch (route) {
     case "rpc":
       return rpc(req);

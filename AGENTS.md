@@ -64,8 +64,9 @@ server/
   cron.ts            напоминания (идемпотентно, флаги reminded_24h / reminded_2h)
   templates.ts       5 шаблонов бизнеса + настройки по умолчанию (BusinessSettings)
   auth.ts            проверка подписи Telegram initData (HMAC)
-  config.ts          конфиг из env, производные секреты из BOT_TOKEN, DEFAULT_PUBLIC_URL
-  db.ts              подключение postgres.js (prepare:false — нужно для пулера Supabase)
+  config.ts          конфиг из env, производные секреты из BOT_TOKEN, определение своего адреса
+  db.ts              подключение postgres.js (prepare:false), DATABASE_URL или POSTGRES_URL, автосоздание таблиц
+  schema.gen.ts      db/001_init.sql в виде строки (генерируется npm run build:api, руками не править)
   pglite.ts          PGlite для тестов и локального сервера
   telegram.ts        обёртка над Bot API (подменяется в тестах)
   format.ts          форматирование дат/цен, экранирование HTML
@@ -79,7 +80,7 @@ web/
 db/001_init.sql      схема БД
 db/002_pg_cron.sql   опционально: напоминания каждые 15 минут через pg_cron
 dev/local-server.ts  локальный запуск без Telegram и Supabase
-tests/               35 тестов
+tests/               41 тест
 docs/design.md       исходный дизайн и решения
 ```
 
@@ -108,7 +109,7 @@ docs/design.md       исходный дизайн и решения
 
 ```bash
 npm install
-npm test                    # 35 тестов, все должны быть зелёными
+npm test                    # 41 тест, все должны быть зелёными
 npm run typecheck
 npm run build && npm run local   # http://localhost:8787/?devUser=1
 #   devUser=1 — суперадмин, 2 — владелец «Ногти Анны», 3+ — клиенты. Сообщения бота печатаются в консоль.
@@ -130,8 +131,8 @@ npm run build && npm run local   # http://localhost:8787/?devUser=1
    `git commit --allow-empty -m "redeploy" && git push`.
 4. **Два деплоя на один бот = война вебхуков.** Каждый продакшен переставляет вебхук на себя.
    После переезда старый проект на Vercel удалить (или убрать в нём `BOT_TOKEN`).
-5. В `server/config.ts` захардкожен `DEFAULT_PUBLIC_URL = "https://botfarm-zapis.vercel.app"` — запасной
-   адрес на случай, если системные переменные Vercel недоступны. **При переезде поменять** или задать env `PUBLIC_URL`.
+5. Свой адрес сервер берёт из `PUBLIC_URL` → `VERCEL_PROJECT_PRODUCTION_URL` → из запроса к основному домену
+   `<проект>.vercel.app` (`isProductionHost`). Проверить, что определился верно: `/api/health` → поле `publicUrl`.
 6. Пулер Supabase (порт 6543, transaction mode) не поддерживает prepared statements — в `db.ts` стоит
    `prepare: false`, не убирать. Прямое подключение `db.<ref>.supabase.co` — только IPv6, с Vercel не работает.
 7. Функции Vercel в регионе `fra1` (`vercel.json`) — рядом с Supabase `eu-central-1`. Новый проект Supabase
@@ -141,26 +142,23 @@ npm run build && npm run local   # http://localhost:8787/?devUser=1
 ## 8. Переезд на аккаунты Дмитрия (бесплатные лимиты)
 
 Сейчас: Vercel и Supabase на аккаунтах Антона, база — схема `botfarm` внутри его проекта `immersive`.
-Данных там только тестовые, поэтому **переносим код, а базу создаём заново**.
+Данные только тестовые, поэтому **переносим код, а базу создаём новую**. Сервер сам создаёт таблицы в пустой
+базе и сам добавляет суперадминов (Антон 8181483439, Дмитрий 2015823821) — SQL руками выполнять не нужно.
 
-1. **GitHub**: Антон передаёт репозиторий `Antonsamarski/botfarm` Дмитрию (Settings → Transfer) или добавляет
-   его коллаборатором. Деплоить должен репозиторий/аккаунт, привязанный к Vercel Дмитрия (см. п.7.2).
-2. **Supabase (аккаунт Дмитрия)**: New project, регион **Frankfurt (eu-central-1)**.
-   SQL Editor → выполнить целиком `db/001_init.sql` (в отдельном проекте можно в схеме `public`;
-   если Supabase ругнётся на extension — заменить первую строку на
-   `create extension if not exists btree_gist with schema extensions;`).
-   Затем добавить суперадминов:
-   `insert into platform_admins (tg_id, note) values (8181483439, 'Антон'), (2015823821, 'Дмитрий');`
-   Строка подключения: Connect → **Transaction pooler** (порт 6543), пользователь `postgres.<ref>`.
-3. **Vercel (аккаунт Дмитрия)**: Add New → Project → импорт репозитория. Пресет подтянется из `vercel.json`.
-   Environment Variables:
-   - `BOT_TOKEN` — токен бота (**перевыпустить в @BotFather `/revoke`**, старый засвечен);
-   - `DATABASE_URL` — строка пулера из шага 2;
-   - `PUBLIC_URL` — `https://<новый-проект>.vercel.app` (или поменять `DEFAULT_PUBLIC_URL` в `config.ts`).
-4. Задеплоить, открыть `https://<новый-проект>.vercel.app/api/health` — должно быть
-   `"ok":true,"db":true,"bot":"…","webhook":"https://<новый-проект>…/api/bot?v=…","superadmins":2`.
-5. **Удалить старый проект `botfarm-zapis` у Антона** (п.7.4). Схему `botfarm` в Supabase Антона потом удалить.
-6. Проверить в Telegram: `/start` → «Панель платформы» → создать бизнес → открыть ссылку клиента с другого аккаунта → записаться.
+1. **GitHub**: репозиторий `Antonsamarski/botfarm` → Settings → Transfer → аккаунт Дмитрия
+   (или Дмитрий создаёт свой репозиторий и пушит туда код). Коммиты дальше — только от GitHub-аккаунта Дмитрия (п.7.2).
+2. **Vercel (аккаунт Дмитрия)**: Add New → Project → импорт репозитория → Deploy.
+3. **База — без копирования паролей**: в проекте Vercel → вкладка **Storage** → Create → **Supabase** (бесплатно),
+   регион **Frankfurt / eu-central-1**, подключить к проекту. Интеграция сама добавит `POSTGRES_URL` и другие переменные.
+   (Альтернатива: свой проект на supabase.com и переменная `DATABASE_URL` = строка Transaction pooler, порт 6543.)
+4. **Environment Variables**: добавить только `BOT_TOKEN` (**перед этим перевыпустить токен в @BotFather `/revoke`**).
+5. Передеплой: `git commit --allow-empty -m redeploy && git push` (кнопка Redeploy на Hobby может просить Pro).
+6. Открыть `https://<проект>.vercel.app/api/health`. Должно быть: `"ok":true,"db":true,"bot":"…"`,
+   `"webhook":"https://<проект>.vercel.app/api/bot?v=…"`, `"superadmins":2`, `"publicUrl"` — адрес нового проекта.
+7. **Сразу после этого** выключить старый проект `botfarm-zapis` у Антона (Settings → Delete project или удалить
+   у него `BOT_TOKEN`), иначе два сервера будут перехватывать бота друг у друга (п.7.4). Схему `botfarm`
+   в Supabase Антона — удалить потом.
+8. Проверить в Telegram: `/start` → «Панель платформы» → создать бизнес → открыть ссылку клиента с другого аккаунта → записаться.
 
 ## 9. Задачи (бэклог) — по отзыву тестировщика Димаса и логике Антона
 

@@ -5,8 +5,16 @@ const env = (k: string, d = "") => (process.env[k] ?? d).trim();
 /** Данные, подгружаемые на лету: юзернейм бота из getMe и суперадмины из таблицы platform_admins. */
 export const runtime = { botUsername: "", dbSuperadmins: [] as number[], requestHost: "" };
 
-/** Боевой адрес на Vercel, если системные переменные недоступны. */
-const DEFAULT_PUBLIC_URL = "https://botfarm-zapis.vercel.app";
+/**
+ * Основной адрес проекта на Vercel: `<проект>.vercel.app`. Адреса отдельных сборок выглядят как
+ * `<проект>-<хеш>-<команда>.vercel.app` или содержат `-git-` — их за основной не считаем.
+ */
+export function isProductionHost(host: string): boolean {
+  if (!/^[a-z0-9-]+\.vercel\.app$/.test(host)) return false;
+  const name = host.replace(/\.vercel\.app$/, "");
+  if (name.includes("-git-")) return false;
+  return !/-[a-z0-9]{9}-/.test(`${name}-`);
+}
 
 /** Секрет, производный от токена бота, — чтобы не заводить лишних переменных окружения. */
 const derived = (purpose: string) =>
@@ -37,8 +45,9 @@ export const config = {
     if (explicit) return explicit.replace(/\/$/, "");
     const v = env("VERCEL_PROJECT_PRODUCTION_URL");
     if (v) return `https://${v}`;
-    const onVercel = env("VERCEL") || env("VERCEL_ENV") || runtime.requestHost.endsWith(".vercel.app");
-    return onVercel ? DEFAULT_PUBLIC_URL : "http://localhost:5173";
+    // системные переменные Vercel недоступны — берём адрес из запроса, если это основной домен проекта
+    if (isProductionHost(runtime.requestHost)) return `https://${runtime.requestHost}`;
+    return "http://localhost:5173";
   },
   get webhookSecret() {
     return env("WEBHOOK_SECRET") || derived("webhook");
@@ -48,7 +57,7 @@ export const config = {
   },
   get isProduction() {
     if (env("VERCEL_ENV")) return env("VERCEL_ENV") === "production";
-    return runtime.requestHost !== "" && `https://${runtime.requestHost}` === config.publicUrl;
+    return isProductionHost(runtime.requestHost) && `https://${runtime.requestHost}` === config.publicUrl;
   },
 };
 

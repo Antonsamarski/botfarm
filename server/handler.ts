@@ -116,6 +116,8 @@ async function status(): Promise<Response> {
     pending: info?.pending_update_count ?? null,
     lastError: info?.last_error_message ?? null,
     superadmins: config.superadmins.length,
+    publicUrl: config.publicUrl,
+    production: config.isProduction,
   });
 }
 
@@ -123,7 +125,7 @@ export async function handle(req: Request): Promise<Response> {
   const url = new URL(req.url);
   runtime.requestHost = req.headers.get("x-forwarded-host") ?? url.host;
   const route = url.searchParams.get("route") || url.pathname.replace(/^\/api\/?/, "");
-  if (route !== "photo" && process.env.DATABASE_URL !== undefined) await refreshPlatform(route === "health");
+  if (route !== "photo" && (process.env.DATABASE_URL || process.env.POSTGRES_URL)) await refreshPlatform(route === "health");
 
   switch (route) {
     case "rpc":
