@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { WA, inTelegram, haptic } from "./lib";
+import { WA, inTelegram, haptic, useTheme } from "./lib";
 
 /** Главная кнопка Telegram (внизу экрана). Вне Telegram рисуем свою. */
 export function MainButton(props: {
@@ -9,6 +9,10 @@ export function MainButton(props: {
   color?: string;
 }) {
   const [busy, setBusy] = useState(false);
+  // в палитре баннера кнопка контрастная (белая/тёмная), иначе — цвет акцента бизнеса
+  const theme = useTheme();
+  const bg = theme ? theme.btn : props.color;
+  const fg = theme ? theme.btnText : "#ffffff";
   const ref = useRef(props.onClick);
   ref.current = props.onClick;
 
@@ -42,18 +46,18 @@ export function MainButton(props: {
       text: props.text,
       is_visible: true,
       is_active: !props.disabled,
-      ...(props.color ? { color: props.color, text_color: "#ffffff" } : {}),
+      ...(bg ? { color: bg, text_color: fg } : {}),
     });
     if (busy) mb.showProgress(false);
     else mb.hideProgress();
-  }, [props.text, props.disabled, props.color, busy]);
+  }, [props.text, props.disabled, bg, fg, busy]);
 
   if (inTelegram) return null;
   return (
     <div className="mainbtn-wrap">
       <button
         className="btn btn-primary btn-block"
-        style={props.color ? { background: props.color } : undefined}
+        style={bg ? { background: bg, color: fg } : undefined}
         disabled={props.disabled || busy}
         onClick={run}
       >

@@ -1,8 +1,8 @@
-import { StrictMode, useEffect, useState } from "react";
+import { StrictMode, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { AdminPanel } from "./admin";
 import { BookFlow, BusinessHome, MyBookings, PortfolioScreen } from "./client";
-import { api, ensureDevAuth, inTelegram, urlParams, WA } from "./lib";
+import { api, applyTheme, ensureDevAuth, inTelegram, makeTheme, ThemeContext, urlParams, useBannerTone, WA } from "./lib";
 import { Landing, SuperPanel } from "./platform";
 import type { Boot } from "./types";
 import { ErrorBox, Spinner } from "./ui";
@@ -16,6 +16,8 @@ type Route =
   | { name: "admin"; businessId: number }
   | { name: "super" };
 
+type ThemeBiz = { id: number; settings: { accent?: string; bannerFileId?: string; bannerColor?: string } };
+
 function initialRoute(boot: Boot): Route {
   const view = urlParams.get("view");
   if (view === "super" && boot.me.isSuper) return { name: "super" };
@@ -28,6 +30,8 @@ function App() {
   const [boot, setBoot] = useState<Boot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stack, setStack] = useState<Route[]>([]);
+  // бизнес, открытый в панели управления (его цвет баннера красит панель)
+  const [adminBiz, setAdminBiz] = useState<ThemeBiz | null>(null);
 
   const load = async (opts: { slug?: string; businessId?: number } = {}) => {
     setError(null);
@@ -45,18 +49,27 @@ function App() {
   useEffect(() => {
     WA?.ready();
     WA?.expand();
-    try {
-      WA?.setHeaderColor?.("secondary_bg_color");
-      WA?.setBackgroundColor?.("secondary_bg_color");
-    } catch {}
     load().then((b) => b && setStack([initialRoute(b)]));
   }, []);
+
+  // Цвет баннера красит все экраны бизнеса: главную, запись, портфолио, «Мои записи» и панель мастера
+  const route0 = stack[stack.length - 1];
+  const themeBiz: ThemeBiz | null =
+    !route0 || route0.name === "super"
+      ? null
+      : route0.name === "admin"
+        ? adminBiz && adminBiz.id === route0.businessId
+          ? adminBiz
+          : null
+        : (boot?.business ?? null);
+  const tone = useBannerTone(themeBiz);
+  const theme = useMemo(() => (tone ? makeTheme(tone) : null), [tone]);
+  useLayoutEffect(() => applyTheme(theme, themeBiz?.settings.accent), [theme, themeBiz?.settings.accent]);
 
   if (error) return <ErrorBox error={error} onRetry={() => load().then((b) => b && setStack([initialRoute(b)]))} />;
   if (!boot || !stack.length) return <Spinner />;
 
   const route = stack[stack.length - 1];
-  document.documentElement.style.setProperty("--accent", boot.business?.settings.accent ?? "var(--btn)");
   const push = (r: Route) => {
     window.scrollTo(0, 0);
     setStack((s) => [...s, r]);
@@ -65,6 +78,9 @@ function App() {
   const home = () => setStack([{ name: "home" }]);
   const biz = boot.business;
 
+  return <ThemeContext.Provider value={theme}>{screen(boot)}</ThemeContext.Provider>;
+
+  function screen(boot: Boot) {
   switch (route.name) {
     case "super":
       return <SuperPanel boot={boot} onBack={pop} onAdmin={(id) => push({ name: "admin", businessId: id })} />;
@@ -74,6 +90,7 @@ function App() {
           key={route.businessId}
           businessId={route.businessId}
           onBack={pop}
+          onTheme={setAdminBiz}
           onPreview={async () => {
             const b = await load({ businessId: route.businessId });
             if (b?.business) push({ name: "home" });
@@ -109,6 +126,7 @@ function App() {
           onAdmin={boot.role ? () => push({ name: "admin", businessId: biz.id }) : undefined}
         />
       );
+  }
   }
 }
 

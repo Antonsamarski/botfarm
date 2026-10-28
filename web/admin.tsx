@@ -55,8 +55,17 @@ interface Overview {
 type Tab = "bookings" | "services" | "schedule" | "more";
 type Sub = null | "settings" | "staff" | "portfolio" | "clients" | "broadcast" | "admins" | "share";
 
-export function AdminPanel(p: { businessId: number; onBack: (() => void) | null; onPreview: () => void }) {
+export function AdminPanel(p: {
+  businessId: number;
+  onBack: (() => void) | null;
+  onPreview: () => void;
+  onTheme?: (b: { id: number; settings: Overview["business"]["settings"] }) => void;
+}) {
   const { data, error, reload } = useLoad<Overview>(() => api("admin.overview", { businessId: p.businessId }), [p.businessId]);
+  // цвет баннера бизнеса красит и панель управления
+  useEffect(() => {
+    if (data) p.onTheme?.(data.business);
+  }, [data]);
   const [tab, setTab] = useState<Tab>("bookings");
   const [sub, setSub] = useState<Sub>(null);
   const [toast, showToast] = useToast();

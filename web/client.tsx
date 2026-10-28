@@ -4,8 +4,6 @@ import {
   api,
   bannerUrl,
   confirmMsg,
-  dominantColor,
-  isLight,
   WA,
   dateOnly,
   duration,
@@ -18,6 +16,7 @@ import {
   openLink,
   photoUrl,
   rub,
+  useTheme,
 } from "./lib";
 import type { Boot, Booking, Service, Slot } from "./types";
 import { BackLink, Cell, Empty, ErrorBox, Field, Icon, MainButton, Section, Spinner, useLoad } from "./ui";
@@ -34,44 +33,13 @@ export function BusinessHome(p: {
   const b = p.boot.business!;
   const s = b.settings;
   const banner = bannerUrl(b.id, s.bannerFileId);
-  // цвет фона главной = преобладающий цвет баннера (считается при загрузке; для старых баннеров — здесь)
-  const [picked, setPicked] = useState<string>("");
-  const tone = banner ? s.bannerColor || picked : "";
-  const light = tone ? isLight(tone) : false;
-
-  useEffect(() => {
-    if (!tone) return;
-    try {
-      WA?.setBackgroundColor?.(tone);
-      WA?.setHeaderColor?.(tone);
-    } catch {}
-    const prev = document.body.style.background;
-    document.body.style.background = tone;
-    return () => {
-      document.body.style.background = prev;
-      try {
-        WA?.setBackgroundColor?.("secondary_bg_color");
-        WA?.setHeaderColor?.("secondary_bg_color");
-      } catch {}
-    };
-  }, [tone]);
-
-  const themed = tone
-    ? ({
-        "--bg": tone,
-        "--text": light ? "#16181c" : "#ffffff",
-        "--sub": light ? "rgba(0,0,0,.62)" : "rgba(255,255,255,.78)",
-        "--tile": light ? "rgba(255,255,255,.55)" : "rgba(255,255,255,.14)",
-        "--tile-press": light ? "rgba(255,255,255,.75)" : "rgba(255,255,255,.24)",
-        "--cta-bg": light ? "#16181c" : "#ffffff",
-        "--cta-text": light ? "#ffffff" : tone,
-        background: tone,
-        color: light ? "#16181c" : "#ffffff",
-      } as any)
-    : ({ "--cta-bg": s.accent, "--cta-text": "#fff" } as any);
+  // фон и палитра — от цвета баннера (задаются на всё приложение в main.tsx)
+  const theme = useTheme();
+  const tone = banner && theme ? theme.tone : "";
+  const themed = tone ? {} : ({ "--cta-bg": s.accent, "--cta-text": "#fff" } as any);
 
   return (
-    <div className={`page page-cover ${tone ? "page-toned" : ""}`} style={{ ["--accent" as any]: s.accent, ...themed }}>
+    <div className={`page page-cover ${tone ? "page-toned" : ""}`} style={themed}>
       <header className={`hero hero-cover ${banner ? "has-banner" : ""}`}>
         <div className="cover" aria-hidden>
           {banner && (
@@ -80,13 +48,6 @@ export function BusinessHome(p: {
                 className="cover-img"
                 src={banner}
                 alt=""
-                onLoad={(e) => {
-                  if (!s.bannerColor) {
-                    try {
-                      setPicked(dominantColor(e.currentTarget));
-                    } catch {}
-                  }
-                }}
               />
               <img className="cover-blur" src={banner} alt="" />
             </>

@@ -1,4 +1,5 @@
 // Обёртки над Telegram WebApp, API и форматированием.
+import { createContext, useContext, useEffect, useState } from "react";
 
 declare global {
   interface Window {
@@ -241,3 +242,77 @@ export const RU_TIMEZONES: [string, string][] = [
   ["Asia/Tashkent", "Ташкент"],
   ["Europe/Minsk", "Минск"],
 ];
+
+/** Палитра бизнеса от цвета баннера: фон — цвет баннера, остальное подбирается под контраст. */
+export type Theme = { tone: string; light: boolean; vars: Record<string, string>; btn: string; btnText: string };
+
+export function makeTheme(tone: string): Theme {
+  const light = isLight(tone);
+  const ink = light ? "#16181c" : "#ffffff";
+  const btn = ink;
+  const btnText = light ? "#ffffff" : tone;
+  const a = (x: number) => (light ? `rgba(0,0,0,${x})` : `rgba(255,255,255,${x})`);
+  const vars: Record<string, string> = {
+    "--bg": tone,
+    "--card": light ? `color-mix(in srgb, ${tone} 45%, #ffffff)` : `color-mix(in srgb, ${tone} 85%, #ffffff)`,
+    "--text": ink,
+    "--sub": a(light ? 0.62 : 0.78),
+    "--hint": a(light ? 0.46 : 0.58),
+    "--head": a(light ? 0.6 : 0.75),
+    "--link": ink,
+    "--btn": btn,
+    "--btn-text": btnText,
+    "--accent": btn,
+    "--accent-text": btnText,
+    "--sep": a(light ? 0.12 : 0.18),
+    "--soft": light ? "rgba(255,255,255,.5)" : "rgba(255,255,255,.14)",
+    "--tile": light ? "rgba(255,255,255,.55)" : "rgba(255,255,255,.14)",
+    "--tile-press": light ? "rgba(255,255,255,.75)" : "rgba(255,255,255,.24)",
+    "--cta-bg": btn,
+    "--cta-text": btnText,
+    "--switch-on": "#34c759",
+  };
+  return { tone, light, vars, btn, btnText };
+}
+
+const THEME_KEYS = Object.keys(makeTheme("#808080").vars);
+
+/** Применить палитру ко всему приложению (null — вернуть тему Telegram). */
+export function applyTheme(theme: Theme | null, accent?: string) {
+  const st = document.documentElement.style;
+  for (const k of THEME_KEYS) st.removeProperty(k);
+  if (theme) for (const [k, v] of Object.entries(theme.vars)) st.setProperty(k, v);
+  else st.setProperty("--accent", accent || "var(--btn)");
+  document.documentElement.classList.toggle("toned", !!theme);
+  try {
+    WA?.setBackgroundColor?.(theme ? theme.tone : "secondary_bg_color");
+    WA?.setHeaderColor?.(theme ? theme.tone : "secondary_bg_color");
+  } catch {}
+}
+
+const toneCache = new Map<string, string>();
+
+/** Цвет баннера: сохранённый при загрузке, а для старых баннеров — считаем по картинке (один раз). */
+export function useBannerTone(biz: { id: number; settings: { bannerFileId?: string; bannerColor?: string } } | null | undefined): string {
+  const url = biz ? bannerUrl(biz.id, biz.settings.bannerFileId) : "";
+  const saved = biz?.settings.bannerColor || "";
+  const [, bump] = useState(0);
+  useEffect(() => {
+    if (!url || saved || toneCache.has(url)) return;
+    const img = new Image();
+    img.onload = () => {
+      try {
+        toneCache.set(url, dominantColor(img));
+      } catch {
+        toneCache.set(url, "");
+      }
+      bump((x) => x + 1);
+    };
+    img.src = url;
+  }, [url, saved]);
+  if (!url) return "";
+  return saved || toneCache.get(url) || "";
+}
+
+export const ThemeContext = createContext<Theme | null>(null);
+export const useTheme = () => useContext(ThemeContext);
