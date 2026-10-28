@@ -199,9 +199,9 @@ export function BookFlow(p: { boot: Boot; serviceId?: number; onBack: () => void
   if (step === "done") {
     return (
       <div className="page">
-        <Empty icon="🎉" title="Вы записаны!" text={`${service!.title}\n${fmtDay(done!.starts_at, tz)}, ${fmtTime(done!.starts_at, tz)}`}>
+        <Empty icon={<Icon name="checkCircle" size={48} />} title="Вы записаны!" text={`${service!.title}\n${fmtDay(done!.starts_at, tz)}, ${fmtTime(done!.starts_at, tz)}`}>
           {s.afterBookingText && <p className="muted pre">{s.afterBookingText}</p>}
-          {s.address && <p className="muted">📍 {s.address}</p>}
+          {s.address && <p className="muted inline-icon"><Icon name="pin" size={14} /> {s.address}</p>}
           <p className="muted">Подтверждение и напоминание придут в чат с ботом.</p>
         </Empty>
         <MainButton text="Мои записи" color={s.accent} onClick={p.onMy} />
@@ -234,7 +234,7 @@ export function BookFlow(p: { boot: Boot; serviceId?: number; onBack: () => void
           <Cell
             title="Любой свободный"
             subtitle="Покажем больше вариантов времени"
-            before="✨"
+            before={<Icon name="sparkle" size={20} />}
             onClick={() => {
               setStaffId(null);
               setStaffChosen(true);
@@ -246,7 +246,7 @@ export function BookFlow(p: { boot: Boot; serviceId?: number; onBack: () => void
               key={st.id}
               title={st.name}
               subtitle={st.description}
-              before="👤"
+              before={<Icon name="user" size={20} />}
               onClick={() => {
                 setStaffId(st.id);
                 setStaffChosen(true);
@@ -373,7 +373,7 @@ function TimePicker(p: {
 
   if (error) return <ErrorBox error={error} onRetry={reload} />;
   if (!data) return <Spinner />;
-  if (!days.length) return <Empty icon="🗓" title="Свободного времени пока нет" text="Загляните позже или выберите другую услугу." />;
+  if (!days.length) return <Empty icon={<Icon name="clock" size={40} />} title="Свободного времени пока нет" text="Загляните позже или выберите другую услугу." />;
 
   const slots = data[p.day ?? days[0]] ?? [];
   const groups: [string, Slot[]][] = [
@@ -434,7 +434,7 @@ export function MyBookings(p: { boot: Boot; onBack: () => void; onBook: () => vo
       <h2 className="page-title">Мои записи</h2>
       {error && <ErrorBox error={error} onRetry={reload} />}
       {!data && !error && <Spinner />}
-      {data && !upcoming.length && <Empty icon="🗓" title="Активных записей нет" text={`${b.settings.emoji} ${b.name}`} />}
+      {data && !upcoming.length && <Empty icon={<Icon name="calendar" size={40} />} title="Активных записей нет" text={b.name} />}
       {upcoming.length > 0 && (
         <Section title="Предстоящие" footer={`Отменить онлайн можно не позже чем за ${b.settings.cancelHours} ч.`}>
           {upcoming.map((bk) => (
@@ -463,7 +463,7 @@ export function MyBookings(p: { boot: Boot; onBack: () => void; onBook: () => vo
           ))}
         </Section>
       )}
-      <MainButton text="📅 Записаться" color={b.settings.accent} onClick={p.onBook} />
+      <MainButton text="Записаться" color={b.settings.accent} onClick={p.onBook} />
     </div>
   );
 }

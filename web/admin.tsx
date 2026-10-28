@@ -30,6 +30,7 @@ import {
   Empty,
   ErrorBox,
   Field,
+  Icon,
   MainButton,
   Section,
   Select,
@@ -96,16 +97,18 @@ export function AdminPanel(p: {
     <div className="page">
       <BackLink onBack={p.onBack} />
       <div className="admin-head">
-        <div className="admin-emoji">{b.settings.emoji}</div>
+        <div className="admin-emoji">
+          {b.settings.bannerFileId ? <img src={bannerUrl(b.id, b.settings.bannerFileId) || undefined} alt="" /> : b.name.trim().charAt(0).toUpperCase()}
+        </div>
         <div>
           <div className="admin-name">{b.name}</div>
           <div className="muted small">
             {data.role === "owner" ? "Владелец" : data.role === "super" ? "Суперадмин" : "Администратор"}
-            {b.status === "blocked" && " · ⛔ заблокирован"}
+            {b.status === "blocked" && " · заблокирован"}
           </div>
         </div>
         <button className="btn btn-small btn-secondary" onClick={p.onPreview}>
-          👁 Как видят клиенты
+          <Icon name="eye" size={16} /> Как видят клиенты
         </button>
       </div>
       <Tabs<Tab>
@@ -130,13 +133,13 @@ export function AdminPanel(p: {
             <Stat n={rub(data.stats.revenue_30d).replace("бесплатно", "0 ₽")} label="за 30 дней" />
           </div>
           <Section>
-            <Cell before="🔗" title="Ссылка для клиентов и QR" onClick={() => setSub("share")} chevron />
-            <Cell before="⚙️" title="Настройки и тексты" onClick={() => setSub("settings")} chevron />
-            <Cell before="👥" title={b.settings.labels.staffPlural} onClick={() => setSub("staff")} chevron />
-            <Cell before="🖼" title="Портфолио" onClick={() => setSub("portfolio")} chevron />
-            <Cell before="📇" title="Клиенты" onClick={() => setSub("clients")} chevron />
-            {data.role !== "admin" && <Cell before="📣" title="Рассылка клиентам" onClick={() => setSub("broadcast")} chevron />}
-            <Cell before="🛡" title="Администраторы" onClick={() => setSub("admins")} chevron />
+            <Cell before={<Icon name="link" size={20} />} title="Ссылка для клиентов и QR" onClick={() => setSub("share")} chevron />
+            <Cell before={<Icon name="sliders" size={20} />} title="Настройки и тексты" onClick={() => setSub("settings")} chevron />
+            <Cell before={<Icon name="users" size={20} />} title={b.settings.labels.staffPlural} onClick={() => setSub("staff")} chevron />
+            <Cell before={<Icon name="photo" size={20} />} title="Портфолио" onClick={() => setSub("portfolio")} chevron />
+            <Cell before={<Icon name="contacts" size={20} />} title="Клиенты" onClick={() => setSub("clients")} chevron />
+            {data.role !== "admin" && <Cell before={<Icon name="megaphone" size={20} />} title="Рассылка клиентам" onClick={() => setSub("broadcast")} chevron />}
+            <Cell before={<Icon name="shield" size={20} />} title="Администраторы" onClick={() => setSub("admins")} chevron />
           </Section>
         </>
       )}
@@ -189,7 +192,7 @@ function BookingsTab({ ov }: Ctx) {
       </div>
       {error && <ErrorBox error={error} onRetry={reload} />}
       {!data && !error && <Spinner />}
-      {data && !list.length && <Empty icon="☕️" title="Записей нет" text={fmtDay(dateOnly(date), "UTC")} />}
+      {data && !list.length && <Empty icon={<Icon name="calendar" size={40} />} title="Записей нет" text={fmtDay(dateOnly(date), "UTC")} />}
       {list.map((bk) => (
         <div key={bk.id} className={`booking ${bk.status === "cancelled" ? "booking-off" : ""}`}>
           <div className="booking-time">
@@ -207,7 +210,7 @@ function BookingsTab({ ov }: Ctx) {
             </div>
             {bk.client_phone && (
               <a className="link small" href={`tel:${bk.client_phone.replace(/[^\d+]/g, "")}`}>
-                📞 {bk.client_phone}
+                <Icon name="phone" size={13} /> {bk.client_phone}
               </a>
             )}
             {Object.entries(bk.answers ?? {}).map(([k, v]) => (
@@ -215,12 +218,12 @@ function BookingsTab({ ov }: Ctx) {
                 {b.settings.fields.find((f) => f.key === k)?.label ?? k}: {v}
               </div>
             ))}
-            {bk.comment && <div className="small muted">💬 {bk.comment}</div>}
+            {bk.comment && <div className="small muted booking-comment"><Icon name="message" size={13} /> {bk.comment}</div>}
             {bk.status === "confirmed" && (
               <div className="booking-actions">
                 {new Date(bk.starts_at).getTime() < Date.now() && (
                   <>
-                    <button className="btn btn-small btn-secondary" onClick={() => act(bk, "done")}>✅ Пришёл</button>
+                    <button className="btn btn-small btn-secondary" onClick={() => act(bk, "done")}>Пришёл</button>
                     <button className="btn btn-small btn-secondary" onClick={() => act(bk, "no_show")}>Не пришёл</button>
                   </>
                 )}
@@ -353,7 +356,7 @@ function ScheduleTab({ ov, reload, toast }: Ctx) {
                       –
                       <TimeSelect value={t} onChange={(v) => setDay(d, intervals.map((x, k) => (k === j ? [x[0], v] : x)))} />
                       {j > 0 ? (
-                        <button className="icon-btn" onClick={() => setDay(d, intervals.filter((_, k) => k !== j))}>✕</button>
+                        <button className="icon-btn" onClick={() => setDay(d, intervals.filter((_, k) => k !== j))}><Icon name="close" size={16} /></button>
                       ) : (
                         intervals.length < 3 && (
                           <button className="icon-btn" onClick={() => setDay(d, [...intervals, [intervals.at(-1)![1] < "21:00" ? intervals.at(-1)![1] : "20:00", "21:00"]])}>
@@ -430,7 +433,7 @@ function ScheduleTab({ ov, reload, toast }: Ctx) {
               }
             }}
           >
-            ⛔ Закрыть для записи
+            <Icon name="lock" size={16} /> Закрыть для записи
           </button>
         </div>
         {(timeOff.data ?? []).map((t) => (
@@ -446,7 +449,7 @@ function ScheduleTab({ ov, reload, toast }: Ctx) {
                   timeOff.reload();
                 }}
               >
-                ✕
+                <Icon name="close" size={16} />
               </button>
             }
           />
@@ -472,8 +475,7 @@ function SettingsEditor({ ov, reload, toast, onSaved }: Ctx & { onSaved: () => v
       <BannerEditor businessId={b.id} fileId={s.bannerFileId} onChange={(fileId) => { setS({ ...s, bannerFileId: fileId }); reload(); }} />
       <Section title="Карточка бизнеса">
         <div className="form">
-          <div className="row2 row-emoji">
-            <Field label="Эмодзи" value={s.emoji} onChange={(v) => set("emoji", v.slice(0, 4))} />
+          <div className="form-row">
             <Field label="Название" value={name} onChange={setName} />
           </div>
           <Field label="Описание" value={s.description} onChange={(v) => set("description", v)} multiline />
@@ -662,7 +664,7 @@ function StaffEditor({ ov, reload, toast }: Ctx) {
       <h2 className="page-title">{L.staffPlural}</h2>
       <Section footer={ov.staff.length > 1 && !b.settings.chooseStaff ? "Чтобы клиенты выбирали мастера, включите это в настройках." : "График каждого — во вкладке «График»."}>
         {ov.staff.map((s) => (
-          <Cell key={s.id} before="👤" title={s.name} subtitle={[s.description, s.active ? "" : "не принимает записи"].filter(Boolean).join(" · ")} onClick={() => setEdit(s)} chevron />
+          <Cell key={s.id} before={<Icon name="user" size={20} />} title={s.name} subtitle={[s.description, s.active ? "" : "не принимает записи"].filter(Boolean).join(" · ")} onClick={() => setEdit(s)} chevron />
         ))}
       </Section>
       <MainButton text={`＋ Добавить`} onClick={() => setEdit({ active: true, sort: ov.staff.length })} />
@@ -716,12 +718,12 @@ function PortfolioEditor({ ov }: Ctx) {
                 reload();
               }}
             >
-              ✕
+              <Icon name="close" size={16} />
             </button>
           </div>
         ))}
       </div>
-      {data && !photos.length && <Empty icon="🖼" title="Пока пусто" text="Добавьте 6–12 лучших работ — так клиенты записываются охотнее." />}
+      {data && !photos.length && <Empty icon={<Icon name="photo" size={40} />} title="Пока пусто" text="Добавьте 6–12 лучших работ — так клиенты записываются охотнее." />}
     </>
   );
 }
@@ -754,7 +756,7 @@ function ClientsList({ ov }: Ctx) {
           />
         ))}
       </Section>
-      {data && !data.length && <Empty icon="📇" title="Клиентов пока нет" text="Поделитесь ссылкой — каждый, кто откроет запись, появится здесь." />}
+      {data && !data.length && <Empty icon={<Icon name="contacts" size={40} />} title="Клиентов пока нет" text="Поделитесь ссылкой — каждый, кто откроет запись, появится здесь." />}
     </>
   );
 }
@@ -772,11 +774,11 @@ function Broadcast({ ov }: Ctx) {
       </p>
       <Section>
         <div className="form">
-          <Field label="Текст" value={text} onChange={setText} multiline placeholder="Есть свободные окна на эту субботу! Скидка 10% по записи до пятницы 💅" />
+          <Field label="Текст" value={text} onChange={setText} multiline placeholder="Есть свободные окна на эту субботу! Скидка 10% по записи до пятницы" />
         </div>
       </Section>
       {result && (
-        <Empty icon="📣" title={`Отправлено: ${result.sent}`} text={result.failed ? `Не доставлено: ${result.failed} (заблокировали бота)` : undefined} />
+        <Empty icon={<Icon name="send" size={40} />} title={`Отправлено: ${result.sent}`} text={result.failed ? `Не доставлено: ${result.failed} (заблокировали бота)` : undefined} />
       )}
       {!result && (
         <MainButton
@@ -809,7 +811,7 @@ function Admins({ ov, reload, toast }: Ctx) {
         {ov.admins.map((a) => (
           <Cell
             key={a.tg_id}
-            before={a.role === "owner" ? "👑" : "🛡"}
+            before={<Icon name={a.role === "owner" ? "crown" : "shield"} size={20} />}
             title={a.first_name || `ID ${a.tg_id}`}
             subtitle={`${a.role === "owner" ? "владелец" : "администратор"}${a.username ? ` · @${a.username}` : ""}`}
             after={
@@ -826,7 +828,7 @@ function Admins({ ov, reload, toast }: Ctx) {
                     }
                   }}
                 >
-                  ✕
+                  <Icon name="close" size={16} />
                 </button>
               )
             }
@@ -923,7 +925,7 @@ function ShareLinks({ ov, toast }: Ctx) {
         <div className="linkbox">{ov.links.client}</div>
         <div className="row2">
           <button className="btn btn-secondary" onClick={async () => (await copy(ov.links.client)) && toast("Скопировано")}>Копировать</button>
-          <button className="btn btn-primary" onClick={() => shareLink(ov.links.client, `${b.settings.emoji} ${b.name} — онлайн-запись`)}>Поделиться</button>
+          <button className="btn btn-primary" onClick={() => shareLink(ov.links.client, `${b.name} — онлайн-запись`)}>Поделиться</button>
         </div>
       </div>
       {qr && (

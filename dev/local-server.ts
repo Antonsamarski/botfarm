@@ -40,7 +40,7 @@ for (const [i, [tpl, name]] of demo.entries()) {
       settings: {
         address: "Самара, ул. Ленинградская, 45",
         contactPhone: "+7 927 000-00-00",
-        description: "Аппаратный маникюр, укрепление, дизайн. Стерильные инструменты 🧼",
+        description: "Аппаратный маникюр, укрепление, дизайн. Стерильные инструменты.",
         links: [{ title: "Instagram", url: "https://instagram.com" }, { title: "Канал", url: "https://t.me/telegram" }],
         bannerFileId: "demo-banner",
       },

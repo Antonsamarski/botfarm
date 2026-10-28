@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { alertMsg, api, copy, haptic, shareLink } from "./lib";
 import type { Boot } from "./types";
-import { BackLink, Cell, Empty, ErrorBox, Field, MainButton, Section, Select, Spinner, Toast, useLoad, useToast } from "./ui";
+import { BackLink, Cell, Empty, ErrorBox, Field, Icon, MainButton, Section, Select, Spinner, Toast, useLoad, useToast } from "./ui";
 
 /** Экран без выбранного бизнеса. */
 export function Landing(p: { boot: Boot; onAdmin: (id: number) => void; onSuper: () => void }) {
@@ -17,13 +17,13 @@ export function Landing(p: { boot: Boot; onAdmin: (id: number) => void; onSuper:
       </header>
       {p.boot.me.isSuper && (
         <Section>
-          <Cell before="👑" title="Панель платформы" onClick={p.onSuper} chevron />
+          <Cell before={<Icon name="crown" size={20} />} title="Панель платформы" onClick={p.onSuper} chevron />
         </Section>
       )}
       {p.boot.adminOf.length > 0 && (
         <Section title="Мои бизнесы">
           {p.boot.adminOf.map((b) => (
-            <Cell key={b.slug} before={b.emoji} title={b.name} subtitle={b.role === "owner" ? "владелец" : "администратор"} onClick={() => p.onAdmin(b.id)} chevron />
+            <Cell key={b.slug} before={<Icon name="sliders" size={20} />} title={b.name} subtitle={b.role === "owner" ? "владелец" : "администратор"} onClick={() => p.onAdmin(b.id)} chevron />
           ))}
         </Section>
       )}
@@ -58,7 +58,7 @@ export function SuperPanel(p: { boot: Boot; onBack: (() => void) | null; onAdmin
     return (
       <div className="page">
         <BackLink onBack={() => setCreated(null)} />
-        <Empty icon="✅" title={`Создан: ${created.business.name}`} />
+        <Empty icon={<Icon name="checkCircle" size={48} />} title={`Создан: ${created.business.name}`} />
         <Section title="Текст для холодной рассылки">
           <div className="pad">
             <div className="linkbox pre">{text}</div>
@@ -75,7 +75,7 @@ export function SuperPanel(p: { boot: Boot; onBack: (() => void) | null; onAdmin
             onClick={async () => (await copy(created.links.admin)) && showToast("Скопировано")}
           />
           <Cell title="Приглашение владельца" subtitle={created.ownerInvite} onClick={async () => (await copy(created.ownerInvite)) && showToast("Скопировано")} />
-          <Cell title="⚙️ Настроить перед отправкой" onClick={() => p.onAdmin(created.business.id)} chevron />
+          <Cell before={<Icon name="sliders" size={20} />} title="Настроить перед отправкой" onClick={() => p.onAdmin(created.business.id)} chevron />
         </Section>
         <Toast text={toast} />
       </div>
@@ -93,7 +93,7 @@ export function SuperPanel(p: { boot: Boot; onBack: (() => void) | null; onAdmin
               label="Шаблон"
               value={form.templateId}
               onChange={(v) => setForm({ ...form, templateId: v })}
-              options={p.boot.templates.map((t) => [t.id, `${t.emoji} ${t.title}`])}
+              options={p.boot.templates.map((t) => [t.id, t.title])}
             />
             <Field label="Название" value={form.name} onChange={(v) => setForm({ ...form, name: v })} placeholder="Барбершоп Борода" required />
             <Field label="Ссылка (необязательно)" value={form.slug} onChange={(v) => setForm({ ...form, slug: v })} placeholder="boroda-samara" hint="латиница, цифры и дефис" />
@@ -121,7 +121,7 @@ export function SuperPanel(p: { boot: Boot; onBack: (() => void) | null; onAdmin
   return (
     <div className="page">
       <BackLink onBack={p.onBack} />
-      <h2 className="page-title">👑 Платформа</h2>
+      <h2 className="page-title">Платформа</h2>
       <div className="stats">
         <div className="stat"><div className="stat-n">{data.stats.businesses}</div><div className="stat-l">бизнесов</div></div>
         <div className="stat"><div className="stat-n">{data.stats.users}</div><div className="stat-l">пользователей</div></div>
@@ -148,7 +148,6 @@ function BizRow({ b, templates, onAdmin, reload, toast }: any) {
   return (
     <>
       <Cell
-        before={t?.emoji ?? "•"}
         title={
           <>
             {b.name} {b.status === "blocked" && <span className="badge badge-red">блок</span>}
@@ -161,12 +160,12 @@ function BizRow({ b, templates, onAdmin, reload, toast }: any) {
       />
       {open && (
         <div className="row-actions">
-          <button className="btn btn-small btn-primary" onClick={onAdmin}>⚙️ Управлять</button>
+          <button className="btn btn-small btn-primary" onClick={onAdmin}>Управлять</button>
           <button className="btn btn-small btn-secondary" onClick={async () => (await copy(b.links.admin)) && toast("Ссылка на панель скопирована")}>
-            ⚙️ Панель
+            <Icon name="sliders" size={14} /> Панель
           </button>
           <button className="btn btn-small btn-secondary" onClick={async () => (await copy(b.links.client)) && toast("Ссылка скопирована")}>
-            🔗 Ссылка
+            <Icon name="link" size={14} /> Ссылка
           </button>
           <button
             className="btn btn-small btn-secondary"
@@ -177,7 +176,7 @@ function BizRow({ b, templates, onAdmin, reload, toast }: any) {
               else shareLink(r.link, text);
             }}
           >
-            ✉️ Приглашение
+            <Icon name="mail" size={14} /> Приглашение
           </button>
           <button
             className="btn btn-small btn-danger"

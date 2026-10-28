@@ -285,3 +285,14 @@ html.toned option { color: #16181c; background: #fff; }
 html.toned .field input::placeholder, html.toned .field textarea::placeholder { color: var(--hint); }
 html.toned .search { background: var(--card); }
 html.toned .btn-danger { background: #e5484d; color: #fff; }
+
+/* Иконки вместо эмодзи */
+.form-row { display: flex; flex-direction: column; gap: 12px; }
+.empty-icon { color: var(--hint); line-height: 0; }
+.cell-before { display: grid; place-items: center; color: var(--sub); }
+.admin-emoji { overflow: hidden; color: var(--text); font-size: 22px; font-weight: 700; }
+.admin-emoji img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.booking-comment, .inline-icon, a.link.small { display: inline-flex; align-items: flex-start; gap: 5px; }
+.booking-comment .icon, .inline-icon .icon, a.link.small .icon { margin-top: 2px; }
+.icon-btn { display: inline-grid; place-items: center; }
+.btn .icon { flex: none; }

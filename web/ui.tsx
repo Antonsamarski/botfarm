@@ -205,7 +205,7 @@ export const Spinner = () => (
   </div>
 );
 
-export const Empty = (p: { icon?: string; title: string; text?: string; children?: ReactNode }) => (
+export const Empty = (p: { icon?: ReactNode; title: string; text?: string; children?: ReactNode }) => (
   <div className="empty">
     {p.icon && <div className="empty-icon">{p.icon}</div>}
     <div className="empty-title">{p.title}</div>
@@ -252,7 +252,7 @@ export function useLoad<T>(fn: () => Promise<T>, deps: unknown[]) {
 }
 
 export const ErrorBox = (p: { error: string; onRetry?: () => void }) => (
-  <Empty icon="⚠️" title="Не получилось загрузить" text={p.error}>
+  <Empty icon={<Icon name="alert" size={40} />} title="Не получилось загрузить" text={p.error}>
     {p.onRetry && (
       <button className="btn btn-secondary" onClick={p.onRetry}>
         Повторить
@@ -307,6 +307,24 @@ const ICONS: Record<string, string> = {
   photo: "M4 5h16v14H4zM4 15l4.5-4.5 4 4 2.5-2.5L20 17M15.5 9.5h.01",
   calendar: "M5 5h14v15H5zM5 10h14M9 3v4M15 3v4",
   arrow: "M9 6l6 6-6 6",
+  sliders: "M4 7h9M17 7h3M15 5v4M4 17h3M11 17h9M9 15v4",
+  users: "M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM3 20a6 6 0 0 1 12 0M16 4.6a3.5 3.5 0 0 1 0 6.3M18 14.6a6 6 0 0 1 3 5.4",
+  user: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM5 20a7 7 0 0 1 14 0",
+  contacts: "M6 3h12v18H6zM9.5 3v18M13 8h2.5M13 12h2.5",
+  megaphone: "M4 10v4h3l8 4.5v-13L7 10H4ZM18.5 9a4 4 0 0 1 0 6",
+  shield: "M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6l7-3Z",
+  crown: "M4 19h16M5 16 3.5 7.5l5 3.5L12 5l3.5 6 5-3.5L19 16H5Z",
+  eye: "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z",
+  message: "M4 5h16v11H9l-5 4V5Z",
+  check: "M5 12.5l4.5 4.5L19 7.5",
+  checkCircle: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM8 12.5l2.8 2.8L16.5 9.5",
+  lock: "M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3",
+  close: "M6 6l12 12M18 6 6 18",
+  alert: "M12 3.5 2.5 20h19L12 3.5ZM12 10v4.5M12 17.5h.01",
+  clock: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7v5l3 2",
+  send: "M21 3 10 14M21 3l-7 18-4-7-7-4 18-7Z",
+  sparkle: "M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18",
+  mail: "M3 5h18v14H3zM3 6l9 7 9-7",
 };
 export function Icon({ name, size = 18 }: { name: keyof typeof ICONS | string; size?: number }) {
   const filled = name === "pin" || name === "phone";
