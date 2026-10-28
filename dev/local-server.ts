@@ -18,8 +18,14 @@ const store = await import("../server/store");
 
 const db = await createPgliteDb();
 setDb(db);
+// последние сообщения бота — для предпросмотра: GET /api/dev-messages
+const outbox: { chatId: number; html: string; at: string }[] = [];
 setSender({
-  sendMessage: async (chatId, html) => console.log(`\n📨 → ${chatId}\n${html.replace(/<[^>]+>/g, "")}`),
+  sendMessage: async (chatId, html) => {
+    outbox.push({ chatId, html, at: new Date().toISOString() });
+    if (outbox.length > 50) outbox.shift();
+    console.log(`\n→ ${chatId}\n${html.replace(/<[^>]+>/g, "")}`);
+  },
   sendPhoto: async () => ({ file_id: `local-${Date.now()}` }),
   setChatMenuButton: async () => ({}),
 });
@@ -68,6 +74,11 @@ const types: Record<string, string> = { ".html": "text/html", ".js": "text/javas
 createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://localhost:8787");
   try {
+    if (url.pathname === "/api/dev-messages") {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify(outbox));
+      return;
+    }
     if (url.pathname === "/api/dev-init") {
       res.end(signInit(Number(url.searchParams.get("user") ?? 1), url.searchParams.get("start") ?? ""));
       return;

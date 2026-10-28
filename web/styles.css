@@ -296,3 +296,9 @@ html.toned .btn-danger { background: #e5484d; color: #fff; }
 .booking-comment .icon, .inline-icon .icon, a.link.small .icon { margin-top: 2px; }
 .icon-btn { display: inline-grid; place-items: center; }
 .btn .icon { flex: none; }
+
+/* Телефон: ошибка под полем и «Взять номер из Telegram» */
+.field-error { font-size: 12px; color: var(--danger); font-weight: 500; }
+.field-bad input { border-color: var(--danger); }
+html.toned .field-error { background: rgba(229, 72, 77, 0.85); color: #fff; padding: 3px 8px; border-radius: 6px; align-self: flex-start; }
+.share-phone { align-self: flex-start; margin-top: -4px; }

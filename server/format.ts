@@ -25,4 +25,4 @@ export function relDay(at: Date | string, tz: string, now = new Date()): string 
   return d.setLocale("ru").toFormat("ccc, d MMMM");
 }
 
-export const rub = (n: number, from = false) => (n === 0 ? "бесплатно" : `${from ? "от " : ""}${n.toLocaleString("ru-RU")} ₽`);
+export const rub = (n: number, from = false) => (n === 0 ? "бесплатно" : `${from ? "от\u00a0" : ""}${n.toLocaleString("ru-RU")}\u00a0₽`);

@@ -18,6 +18,7 @@ import {
   rub,
   useTheme,
 } from "./lib";
+import { checkPhone, maskPhone } from "../server/phone";
 import type { Boot, Booking, Service, Slot } from "./types";
 import { BackLink, Cell, Empty, ErrorBox, Field, Icon, MainButton, Section, Spinner, useLoad } from "./ui";
 
@@ -178,7 +179,25 @@ export function BookFlow(p: { boot: Boot; serviceId?: number; onBack: () => void
   const [day, setDay] = useState<string | null>(null);
   const [slot, setSlot] = useState<Slot | null>(null);
   const [name, setName] = useState(p.boot.client?.name || p.boot.me.name || "");
-  const [phone, setPhone] = useState(p.boot.client?.phone || "");
+  const [phone, setPhone] = useState(maskPhone(p.boot.client?.phone || ""));
+  const [phoneErr, setPhoneErr] = useState<string | null>(null);
+  // маска +7 (999) 123-45-67; стирание разделителя стирает и цифру перед ним
+  const onPhone = (v: string) => {
+    if (v.length < phone.length && v.replace(/\D/g, "") === phone.replace(/\D/g, "")) v = v.replace(/\d(?=\D*$)/, "");
+    const next = maskPhone(v);
+    setPhone(next);
+    if (phoneErr) setPhoneErr(next && !checkPhone(next).ok ? phoneErr : null);
+  };
+  const canShareContact = !!WA?.requestContact && WA?.isVersionAtLeast?.("6.9");
+  const takeFromTelegram = () =>
+    WA.requestContact((ok: boolean, res: any) => {
+      const raw: string | undefined = res?.responseUnsafe?.contact?.phone_number;
+      if (ok && raw) {
+        setPhone(maskPhone(raw.startsWith("+") ? raw : `+${raw}`));
+        setPhoneErr(null);
+        haptic("success");
+      } else if (ok) alertMsg("Номер отправлен в чат с ботом. Если поле не заполнилось — введите его вручную.");
+    });
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [comment, setComment] = useState("");
   const [done, setDone] = useState<{ starts_at: string } | null>(null);
@@ -287,12 +306,19 @@ export function BookFlow(p: { boot: Boot; serviceId?: number; onBack: () => void
               <Field
                 label="Телефон"
                 value={phone}
-                onChange={setPhone}
+                onChange={onPhone}
                 type="tel"
                 inputMode="tel"
-                placeholder="+7 900 000-00-00"
+                autoComplete="tel"
+                placeholder="+7 (999) 123-45-67"
                 required={s.requirePhone}
+                error={phoneErr}
               />
+              {canShareContact && (
+                <button type="button" className="btn btn-secondary btn-small share-phone" onClick={takeFromTelegram}>
+                  <Icon name="phone" size={14} /> Взять номер из Telegram
+                </button>
+              )}
               {s.fields.map((f) => (
                 <Field
                   key={f.key}
@@ -310,6 +336,14 @@ export function BookFlow(p: { boot: Boot; serviceId?: number; onBack: () => void
             text={`Записаться на ${slot.label}`}
             color={s.accent}
             onClick={async () => {
+              if (phone || s.requirePhone) {
+                const pc = checkPhone(phone);
+                if (!pc.ok) {
+                  haptic("error");
+                  setPhoneErr(pc.error);
+                  return;
+                }
+              }
               await ensureWriteAccess();
               try {
                 const res = await api("book", {

@@ -148,9 +148,11 @@ export function Field(p: {
   hint?: string;
   inputMode?: "numeric" | "tel" | "text" | "decimal" | "url";
   required?: boolean;
+  error?: string | null;
+  autoComplete?: string;
 }) {
   return (
-    <label className="field">
+    <label className={`field ${p.error ? "field-bad" : ""}`}>
       <span className="field-label">
         {p.label}
         {p.required && <span className="req"> *</span>}
@@ -163,10 +165,11 @@ export function Field(p: {
           value={p.value}
           placeholder={p.placeholder}
           inputMode={p.inputMode}
+          autoComplete={p.autoComplete}
           onChange={(e) => p.onChange(e.target.value)}
         />
       )}
-      {p.hint && <span className="field-hint">{p.hint}</span>}
+      {p.error ? <span className="field-error">{p.error}</span> : p.hint && <span className="field-hint">{p.hint}</span>}
     </label>
   );
 }

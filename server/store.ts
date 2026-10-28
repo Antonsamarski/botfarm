@@ -1,3 +1,4 @@
+import { checkPhone } from "./phone.js";
 import { randomBytes } from "node:crypto";
 import { DateTime } from "luxon";
 import { type Db, isOverlapError } from "./db.js";
@@ -338,8 +339,13 @@ export async function createBooking(
   const s = business.settings;
   const name = client.name.trim().slice(0, 80);
   if (name.length < 2) throw new UserError("Укажите имя");
-  const phone = client.phone.trim();
+  let phone = client.phone.trim();
   if (s.requirePhone && !phone) throw new UserError("Укажите телефон");
+  if (phone) {
+    const pc = checkPhone(phone);
+    if (!pc.ok) throw new UserError(pc.error);
+    phone = pc.phone;
+  }
   const answers: Record<string, string> = {};
   for (const f of s.fields) {
     const v = (opts.answers?.[f.key] ?? "").trim().slice(0, 300);

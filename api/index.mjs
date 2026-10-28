@@ -99,7 +99,7 @@ var init_format = __esm({
   "server/format.ts"() {
     "use strict";
     esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    rub = (n, from = false) => n === 0 ? "\u0431\u0435\u0441\u043F\u043B\u0430\u0442\u043D\u043E" : `${from ? "\u043E\u0442 " : ""}${n.toLocaleString("ru-RU")} \u20BD`;
+    rub = (n, from = false) => n === 0 ? "\u0431\u0435\u0441\u043F\u043B\u0430\u0442\u043D\u043E" : `${from ? "\u043E\u0442\xA0" : ""}${n.toLocaleString("ru-RU")}\xA0\u20BD`;
   }
 });
 
@@ -163,67 +163,71 @@ async function adminRecipients(db2, businessId, staffId) {
   );
   return rows.map((r) => Number(r.tg_id));
 }
-function bookingLines(b, biz, staffName2) {
-  const fieldLines = biz.settings.fields.filter((f) => b.answers?.[f.key]).map((f) => `${esc(f.label)}: ${esc(b.answers[f.key])}`);
-  return [
-    `\u{1F5D3} <b>${esc(fmtWhen(b.starts_at, biz.timezone))}</b>`,
-    `\u{1F4BC} ${esc(b.service_title)}${b.price ? ` \xB7 ${rub(b.price)}` : ""}`,
-    staffName2 && biz.settings.chooseStaff ? `\u{1F464} ${esc(biz.settings.labels.staff)}: ${esc(staffName2)}` : "",
-    ...fieldLines
-  ].filter(Boolean).join("\n");
+function bookingCard(b, biz, staffName2) {
+  const lines = [
+    `<b>${esc(fmtWhen(b.starts_at, biz.timezone))}</b>`,
+    `${esc(b.service_title)}${b.price ? ` \u2014 ${rub(b.price)}` : ""}`,
+    staffName2 && biz.settings.chooseStaff ? row(biz.settings.labels.staff, esc(staffName2)) : "",
+    ...biz.settings.fields.filter((f) => b.answers?.[f.key]).map((f) => row(f.label, esc(b.answers[f.key])))
+  ].filter(Boolean);
+  return `<blockquote>${lines.join("\n")}</blockquote>`;
 }
 async function onBookingCreated(db2, biz, b) {
   const sName = await staffName(db2, b.staff_id);
-  const adminText = [
-    `\u{1F195} <b>\u041D\u043E\u0432\u0430\u044F \u0437\u0430\u043F\u0438\u0441\u044C</b> \xB7 ${esc(biz.name)}`,
-    "",
-    bookingLines(b, biz, sName),
-    `\u{1F64B} ${esc(b.client_name)}${b.client_phone ? ` \xB7 ${esc(b.client_phone)}` : ""}`,
-    `<a href="tg://user?id=${b.client_tg_id}">\u041D\u0430\u043F\u0438\u0441\u0430\u0442\u044C \u043A\u043B\u0438\u0435\u043D\u0442\u0443</a>`,
-    b.comment ? `\u{1F4AC} ${esc(b.comment)}` : ""
-  ].filter((x) => x !== "").join("\n");
+  const adminText = join([
+    `<b>\u041D\u043E\u0432\u0430\u044F \u0437\u0430\u043F\u0438\u0441\u044C</b> \xB7 ${esc(biz.name)}`,
+    bookingCard(b, biz, sName),
+    row("\u041A\u043B\u0438\u0435\u043D\u0442", `<b>${esc(b.client_name)}</b>`),
+    b.client_phone && row("\u0422\u0435\u043B\u0435\u0444\u043E\u043D", phoneHtml(b.client_phone)),
+    b.comment && row("\u041A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0439", esc(b.comment)),
+    GAP,
+    `<a href="tg://user?id=${b.client_tg_id}">\u041D\u0430\u043F\u0438\u0441\u0430\u0442\u044C \u043A\u043B\u0438\u0435\u043D\u0442\u0443 \u0432 Telegram</a>`
+  ]);
   const adminKb = webAppButton("\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0437\u0430\u043F\u0438\u0441\u0438", webAppUrl({ b: biz.slug, view: "admin" }));
   await Promise.all((await adminRecipients(db2, biz.id, b.staff_id)).map((id) => safeSend(id, adminText, adminKb)));
-  const clientText = [
-    `\u2705 <b>\u0412\u044B \u0437\u0430\u043F\u0438\u0441\u0430\u043D\u044B!</b> ${esc(biz.settings.emoji)} ${esc(biz.name)}`,
-    "",
-    bookingLines(b, biz, sName),
-    biz.settings.address ? `\u{1F4CD} ${esc(biz.settings.address)}` : "",
-    biz.settings.afterBookingText ? `
-${esc(biz.settings.afterBookingText)}` : ""
-  ].filter((x) => x !== "").join("\n");
+  const clientText = join([
+    `<b>\u0412\u044B \u0437\u0430\u043F\u0438\u0441\u0430\u043D\u044B</b> \xB7 ${esc(biz.name)}`,
+    bookingCard(b, biz, sName),
+    biz.settings.address && row("\u0410\u0434\u0440\u0435\u0441", esc(biz.settings.address)),
+    biz.settings.contactPhone && row("\u0422\u0435\u043B\u0435\u0444\u043E\u043D", phoneHtml(biz.settings.contactPhone)),
+    biz.settings.afterBookingText && GAP,
+    biz.settings.afterBookingText && `<i>${esc(biz.settings.afterBookingText)}</i>`
+  ]);
   await safeSend(b.client_tg_id, clientText, webAppButton("\u041C\u043E\u0438 \u0437\u0430\u043F\u0438\u0441\u0438", webAppUrl({ b: biz.slug, view: "my" })));
 }
 async function onBookingCancelled(db2, biz, b) {
   const sName = await staffName(db2, b.staff_id);
   if (b.cancelled_by === "client") {
-    const text = `\u{1F6AB} <b>\u041A\u043B\u0438\u0435\u043D\u0442 \u043E\u0442\u043C\u0435\u043D\u0438\u043B \u0437\u0430\u043F\u0438\u0441\u044C</b> \xB7 ${esc(biz.name)}
-
-${bookingLines(b, biz, sName)}
-\u{1F64B} ${esc(b.client_name)}`;
+    const text = join([
+      `<b>\u041A\u043B\u0438\u0435\u043D\u0442 \u043E\u0442\u043C\u0435\u043D\u0438\u043B \u0437\u0430\u043F\u0438\u0441\u044C</b> \xB7 ${esc(biz.name)}`,
+      `<blockquote><s>${esc(fmtWhen(b.starts_at, biz.timezone))}</s>
+${esc(b.service_title)}</blockquote>`,
+      row("\u041A\u043B\u0438\u0435\u043D\u0442", `<b>${esc(b.client_name)}</b>`),
+      b.client_phone && row("\u0422\u0435\u043B\u0435\u0444\u043E\u043D", phoneHtml(b.client_phone)),
+      GAP,
+      "<i>\u042D\u0442\u043E \u0432\u0440\u0435\u043C\u044F \u0441\u043D\u043E\u0432\u0430 \u0441\u0432\u043E\u0431\u043E\u0434\u043D\u043E \u0434\u043B\u044F \u0437\u0430\u043F\u0438\u0441\u0438.</i>"
+    ]);
     await Promise.all((await adminRecipients(db2, biz.id, b.staff_id)).map((id) => safeSend(id, text)));
   } else {
-    const text = [
-      `\u{1F614} <b>\u0417\u0430\u043F\u0438\u0441\u044C \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u0430</b> \xB7 ${esc(biz.name)}`,
-      "",
-      bookingLines(b, biz, sName),
-      "",
-      "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435, \u043F\u043E\u0436\u0430\u043B\u0443\u0439\u0441\u0442\u0430, \u0434\u0440\u0443\u0433\u043E\u0435 \u0432\u0440\u0435\u043C\u044F \u2014 \u0431\u0443\u0434\u0435\u043C \u0440\u0430\u0434\u044B \u0432\u0430\u0441 \u0432\u0438\u0434\u0435\u0442\u044C."
-    ].join("\n");
+    const text = join([
+      `<b>\u0417\u0430\u043F\u0438\u0441\u044C \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u0430</b> \xB7 ${esc(biz.name)}`,
+      `<blockquote><s>${esc(fmtWhen(b.starts_at, biz.timezone))}</s>
+${esc(b.service_title)}</blockquote>`,
+      "\u0418\u0437\u0432\u0438\u043D\u0438\u0442\u0435 \u0437\u0430 \u043D\u0435\u0443\u0434\u043E\u0431\u0441\u0442\u0432\u043E. \u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435, \u043F\u043E\u0436\u0430\u043B\u0443\u0439\u0441\u0442\u0430, \u0434\u0440\u0443\u0433\u043E\u0435 \u0432\u0440\u0435\u043C\u044F \u2014 \u0431\u0443\u0434\u0435\u043C \u0440\u0430\u0434\u044B \u0432\u0430\u0441 \u0432\u0438\u0434\u0435\u0442\u044C."
+    ]);
     await safeSend(b.client_tg_id, text, webAppButton("\u0417\u0430\u043F\u0438\u0441\u0430\u0442\u044C\u0441\u044F \u0441\u043D\u043E\u0432\u0430", webAppUrl({ b: biz.slug })));
   }
 }
 async function sendReminder(biz, b, kind, now = /* @__PURE__ */ new Date()) {
   const when = `${relDay(b.starts_at, biz.timezone, now)} \u0432 ${fmtTime(b.starts_at, biz.timezone)}`;
-  const head = [
-    kind === "2h" ? `\u23F0 <b>\u0421\u043A\u043E\u0440\u043E \u0432\u0438\u0437\u0438\u0442: ${esc(when)}</b>` : `\u{1F514} <b>\u041D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u0435\u043C \u043E \u0437\u0430\u043F\u0438\u0441\u0438: ${esc(when)}</b>`,
-    `${esc(biz.settings.emoji)} ${esc(biz.name)} \xB7 ${esc(b.service_title)}`
-  ];
-  if (biz.settings.address) head.push(`\u{1F4CD} ${esc(biz.settings.address)}`);
-  const tail = kind === "24h" ? "\u0415\u0441\u043B\u0438 \u043F\u043B\u0430\u043D\u044B \u0438\u0437\u043C\u0435\u043D\u0438\u043B\u0438\u0441\u044C \u2014 \u043E\u0442\u043C\u0435\u043D\u0438\u0442\u0435 \u0437\u0430\u043F\u0438\u0441\u044C, \u0447\u0442\u043E\u0431\u044B \u0432\u0440\u0435\u043C\u044F \u0434\u043E\u0441\u0442\u0430\u043B\u043E\u0441\u044C \u0434\u0440\u0443\u0433\u043E\u043C\u0443." : "\u0414\u043E \u0432\u0441\u0442\u0440\u0435\u0447\u0438!";
-  const text = `${head.join("\n")}
-
-${tail}`;
+  const text = join([
+    kind === "2h" ? `<b>\u0421\u043A\u043E\u0440\u043E \u0432\u0438\u0437\u0438\u0442 \u2014 ${esc(when)}</b>` : `<b>\u041D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u0435\u043C \u043E \u0437\u0430\u043F\u0438\u0441\u0438 \u2014 ${esc(when)}</b>`,
+    `<blockquote>${esc(biz.name)}
+${esc(b.service_title)}</blockquote>`,
+    biz.settings.address && row("\u0410\u0434\u0440\u0435\u0441", esc(biz.settings.address)),
+    GAP,
+    kind === "24h" ? "<i>\u0415\u0441\u043B\u0438 \u043F\u043B\u0430\u043D\u044B \u0438\u0437\u043C\u0435\u043D\u0438\u043B\u0438\u0441\u044C \u2014 \u043E\u0442\u043C\u0435\u043D\u0438\u0442\u0435 \u0437\u0430\u043F\u0438\u0441\u044C, \u0447\u0442\u043E\u0431\u044B \u0432\u0440\u0435\u043C\u044F \u0434\u043E\u0441\u0442\u0430\u043B\u043E\u0441\u044C \u0434\u0440\u0443\u0433\u043E\u043C\u0443.</i>" : "\u0414\u043E \u0432\u0441\u0442\u0440\u0435\u0447\u0438!"
+  ]);
   return safeSend(b.client_tg_id, text, webAppButton("\u041C\u043E\u0438 \u0437\u0430\u043F\u0438\u0441\u0438", webAppUrl({ b: biz.slug, view: "my" })));
 }
 async function notifySuperadmins(html) {
@@ -234,7 +238,7 @@ async function broadcast(db2, biz, text) {
     `select tg_id from clients where business_id = $1 and not blocked_bot order by last_seen desc limit 2000`,
     [biz.id]
   );
-  const html = `${esc(biz.settings.emoji)} <b>${esc(biz.name)}</b>
+  const html = `<b>${esc(biz.name)}</b>
 
 ${esc(text)}`;
   const kb = webAppButton("\u0417\u0430\u043F\u0438\u0441\u0430\u0442\u044C\u0441\u044F", webAppUrl({ b: biz.slug }));
@@ -261,7 +265,7 @@ ${esc(text)}`;
   }
   return { sent, failed };
 }
-var webAppButton, staffName;
+var webAppButton, row, phoneHtml, staffName, GAP, join;
 var init_notify = __esm({
   "server/notify.ts"() {
     "use strict";
@@ -269,7 +273,11 @@ var init_notify = __esm({
     init_format();
     init_telegram();
     webAppButton = (text, url) => ({ reply_markup: { inline_keyboard: [[{ text, web_app: { url } }]] } });
+    row = (label, value) => `<i>${esc(label)}:</i> ${value}`;
+    phoneHtml = (p) => `<code>${esc(p)}</code>`;
     staffName = async (db2, id) => (await db2.query(`select name from staff where id = $1`, [id]))[0]?.name;
+    GAP = "\0";
+    join = (parts) => parts.filter((x) => typeof x === "string" && x !== "").map((x) => x === GAP ? "" : x).join("\n");
   }
 });
 
@@ -500,8 +508,8 @@ var DEFAULT_SUPERADMINS = [
   [2015823821, "\u0414\u043C\u0438\u0442\u0440\u0438\u0439"]
 ];
 async function ensureSchema(sql) {
-  const [row] = await sql.unsafe(`select to_regclass('businesses') is not null as ok`);
-  if (row?.ok) return;
+  const [row2] = await sql.unsafe(`select to_regclass('businesses') is not null as ok`);
+  if (row2?.ok) return;
   try {
     await sql.unsafe(`create extension if not exists btree_gist with schema extensions`);
   } catch {
@@ -531,6 +539,40 @@ function isOverlapError(e) {
 
 // server/bot.ts
 init_format();
+
+// server/phone.ts
+var PHONE_ERROR = "\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u043D\u043E\u043C\u0435\u0440 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0430 \u2014 \u043D\u0430\u043F\u0440\u0438\u043C\u0435\u0440, +7 999 123-45-67";
+function formatRu(d) {
+  return `+7 (${d.slice(1, 4)}) ${d.slice(4, 7)}-${d.slice(7, 9)}-${d.slice(9, 11)}`;
+}
+function looksFake(national) {
+  const sub = national.slice(-7);
+  if (/^(\d)\1+$/.test(sub)) return true;
+  if (/^(\d)\1+$/.test(national)) return true;
+  const seq = "01234567890123456789";
+  const rev = "98765432109876543210";
+  if (seq.includes(national) || rev.includes(national)) return true;
+  return false;
+}
+function checkPhone(raw) {
+  const s = String(raw ?? "").trim();
+  let d = s.replace(/\D/g, "");
+  if (!d) return { ok: false, error: "\u0423\u043A\u0430\u0436\u0438\u0442\u0435 \u0442\u0435\u043B\u0435\u0444\u043E\u043D" };
+  const plus = s.startsWith("+");
+  if (!plus && d.length === 11 && d[0] === "8") d = "7" + d.slice(1);
+  if (!plus && d.length === 10 && d[0] === "9") d = "7" + d;
+  if (d[0] === "7") {
+    if (d.length !== 11) return { ok: false, error: PHONE_ERROR };
+    const national = d.slice(1);
+    if (!/^[34789]/.test(national)) return { ok: false, error: PHONE_ERROR };
+    if (looksFake(national)) return { ok: false, error: PHONE_ERROR };
+    return { ok: true, phone: formatRu(d) };
+  }
+  if (!plus || d.length < 8 || d.length > 15 || d[0] === "0" || looksFake(d.slice(-9))) {
+    return { ok: false, error: PHONE_ERROR };
+  }
+  return { ok: true, phone: `+${d}` };
+}
 
 // server/store.ts
 import { randomBytes } from "node:crypto";
@@ -750,13 +792,13 @@ var UserError = class extends Error {
 };
 var rowToBusiness = (r) => ({ ...r, settings: withDefaults(r.template, r.settings) });
 async function upsertUser(db2, u) {
-  const [row] = await db2.query(
+  const [row2] = await db2.query(
     `insert into users (tg_id, first_name, username) values ($1, $2, $3)
      on conflict (tg_id) do update set first_name = excluded.first_name, username = excluded.username, seen_at = now()
      returning last_business_id`,
     [u.id, u.first_name ?? "", u.username ?? null]
   );
-  return row;
+  return row2;
 }
 async function setLastBusiness(db2, tgId, businessId) {
   await db2.query(`update users set last_business_id = $2 where tg_id = $1`, [tgId, businessId]);
@@ -866,11 +908,11 @@ async function updateBusiness(db2, businessId, patch) {
   if (patch.timezone && !DateTime3.local().setZone(patch.timezone).isValid) throw new UserError("\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u044B\u0439 \u0447\u0430\u0441\u043E\u0432\u043E\u0439 \u043F\u043E\u044F\u0441");
   const settings = { ...b.settings, ...patch.settings ?? {} };
   if (settings.stepMin < 5 || settings.stepMin > 240) throw new UserError("\u0428\u0430\u0433 \u0441\u0435\u0442\u043A\u0438 \u2014 \u043E\u0442 5 \u0434\u043E 240 \u043C\u0438\u043D\u0443\u0442");
-  const [row] = await db2.query(
+  const [row2] = await db2.query(
     `update businesses set name = $2, timezone = $3, settings = $4 where id = $1 returning *`,
     [businessId, (patch.name ?? b.name).trim().slice(0, 80), patch.timezone ?? b.timezone, settings]
   );
-  return rowToBusiness(row);
+  return rowToBusiness(row2);
 }
 async function createInvite(db2, businessId, role, createdBy) {
   const code = randomBytes(9).toString("base64url");
@@ -980,8 +1022,13 @@ async function createBooking(db2, opts) {
   const s = business.settings;
   const name = client.name.trim().slice(0, 80);
   if (name.length < 2) throw new UserError("\u0423\u043A\u0430\u0436\u0438\u0442\u0435 \u0438\u043C\u044F");
-  const phone = client.phone.trim();
+  let phone = client.phone.trim();
   if (s.requirePhone && !phone) throw new UserError("\u0423\u043A\u0430\u0436\u0438\u0442\u0435 \u0442\u0435\u043B\u0435\u0444\u043E\u043D");
+  if (phone) {
+    const pc = checkPhone(phone);
+    if (!pc.ok) throw new UserError(pc.error);
+    phone = pc.phone;
+  }
   const answers = {};
   for (const f of s.fields) {
     const v = (opts.answers?.[f.key] ?? "").trim().slice(0, 300);
@@ -1002,7 +1049,7 @@ async function createBooking(db2, opts) {
   const [service] = await listServices(db2, business.id).then((l) => l.filter((x) => x.id === opts.serviceId));
   for (const staffId of slot.staffIds) {
     try {
-      const [row] = await db2.query(
+      const [row2] = await db2.query(
         `insert into bookings (business_id, staff_id, service_id, service_title, price, client_tg_id, client_name,
            client_phone, answers, comment, starts_at, ends_at)
          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) returning *`,
@@ -1026,7 +1073,7 @@ async function createBooking(db2, opts) {
          on conflict (business_id, tg_id) do update set name = excluded.name, phone = excluded.phone, last_seen = now()`,
         [business.id, client.tgId, name, phone]
       );
-      return row;
+      return row2;
     } catch (e) {
       if (isOverlapError(e)) continue;
       throw e;
@@ -1049,11 +1096,11 @@ async function cancelBooking(db2, opts) {
       throw new UserError(`\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u043E\u043D\u043B\u0430\u0439\u043D \u043C\u043E\u0436\u043D\u043E \u043D\u0435 \u043F\u043E\u0437\u0436\u0435 \u0447\u0435\u043C \u0437\u0430 ${opts.business.settings.cancelHours} \u0447. \u041D\u0430\u043F\u0438\u0448\u0438\u0442\u0435 \u043C\u0430\u0441\u0442\u0435\u0440\u0443.`);
     }
   }
-  const [row] = await db2.query(
+  const [row2] = await db2.query(
     `update bookings set status = 'cancelled', cancelled_by = $2 where id = $1 returning *`,
     [b.id, opts.by]
   );
-  return row;
+  return row2;
 }
 var clientBookings = (db2, businessId, tgId) => db2.query(
   `select * from bookings where business_id = $1 and client_tg_id = $2
@@ -1066,12 +1113,12 @@ var bookingsInRange = (db2, businessId, from, to) => db2.query(
   [businessId, from, to]
 );
 async function setBookingStatus(db2, businessId, id, status2) {
-  const [row] = await db2.query(
+  const [row2] = await db2.query(
     `update bookings set status = $3 where id = $1 and business_id = $2 and status <> 'cancelled' returning *`,
     [id, businessId, status2]
   );
-  if (!row) throw new UserError("\u0417\u0430\u043F\u0438\u0441\u044C \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u0430");
-  return row;
+  if (!row2) throw new UserError("\u0417\u0430\u043F\u0438\u0441\u044C \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u0430");
+  return row2;
 }
 async function businessStats(db2, businessId) {
   const [r] = await db2.query(
@@ -1127,10 +1174,13 @@ function getBot() {
 var isSuper = (id) => config.superadmins.includes(id);
 async function showBusiness(ctx, b) {
   const s = b.settings;
-  const kb = new InlineKeyboard().webApp(`\u{1F4C5} \u0417\u0430\u043F\u0438\u0441\u0430\u0442\u044C\u0441\u044F \u043E\u043D\u043B\u0430\u0439\u043D`, webAppUrl({ b: b.slug })).row().webApp("\u{1F5C2} \u041C\u043E\u0438 \u0437\u0430\u043F\u0438\u0441\u0438", webAppUrl({ b: b.slug, view: "my" }));
-  const lines = [`${esc(s.emoji)} <b>${esc(b.name)}</b>`, "", esc(s.welcome)];
-  if (s.address) lines.push("", `\u{1F4CD} ${esc(s.address)}`);
-  if (s.contactPhone) lines.push(`\u{1F4DE} ${esc(s.contactPhone)}`);
+  const kb = new InlineKeyboard().webApp("\u0417\u0430\u043F\u0438\u0441\u0430\u0442\u044C\u0441\u044F \u043E\u043D\u043B\u0430\u0439\u043D", webAppUrl({ b: b.slug })).row().webApp("\u041C\u043E\u0438 \u0437\u0430\u043F\u0438\u0441\u0438", webAppUrl({ b: b.slug, view: "my" }));
+  const lines = [`<b>${esc(b.name)}</b>`, "", esc(s.welcome)];
+  const info = [
+    s.address && `<i>\u0410\u0434\u0440\u0435\u0441:</i> ${esc(s.address)}`,
+    s.contactPhone && `<i>\u0422\u0435\u043B\u0435\u0444\u043E\u043D:</i> <code>${esc(s.contactPhone)}</code>`
+  ].filter(Boolean);
+  if (info.length) lines.push("", ...info);
   await ctx.reply(lines.join("\n"), { parse_mode: "HTML", reply_markup: kb, link_preview_options: { is_disabled: true } });
   await ctx.api.setChatMenuButton({ chat_id: ctx.chat.id, menu_button: { type: "web_app", text: "\u0417\u0430\u043F\u0438\u0441\u0430\u0442\u044C\u0441\u044F", web_app: { url: webAppUrl({ b: b.slug }) } } }).catch(() => {
   });
@@ -1139,10 +1189,10 @@ async function showPlatform(ctx) {
   const uid = ctx.from.id;
   const adminOf = await businessesOfAdmin(db(), uid);
   const kb = new InlineKeyboard();
-  for (const b of adminOf.slice(0, 5)) kb.webApp(`\u2699\uFE0F ${b.name}`, webAppUrl({ b: b.slug, view: "admin" })).row();
-  if (isSuper(uid)) kb.webApp("\u{1F451} \u041F\u0430\u043D\u0435\u043B\u044C \u043F\u043B\u0430\u0442\u0444\u043E\u0440\u043C\u044B", webAppUrl({ view: "super" })).row();
+  for (const b of adminOf.slice(0, 5)) kb.webApp(`\u041F\u0430\u043D\u0435\u043B\u044C: ${b.name}`, webAppUrl({ b: b.slug, view: "admin" })).row();
+  if (isSuper(uid)) kb.webApp("\u041F\u0430\u043D\u0435\u043B\u044C \u043F\u043B\u0430\u0442\u0444\u043E\u0440\u043C\u044B", webAppUrl({ view: "super" })).row();
   const text = adminOf.length || isSuper(uid) ? "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435, \u0447\u0442\u043E \u043E\u0442\u043A\u0440\u044B\u0442\u044C:" : [
-    "\u{1F44B} <b>\u041E\u043D\u043B\u0430\u0439\u043D-\u0437\u0430\u043F\u0438\u0441\u044C</b>",
+    "<b>\u041E\u043D\u043B\u0430\u0439\u043D-\u0437\u0430\u043F\u0438\u0441\u044C</b>",
     "",
     "\u0427\u0442\u043E\u0431\u044B \u0437\u0430\u043F\u0438\u0441\u0430\u0442\u044C\u0441\u044F, \u043E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u0441\u0441\u044B\u043B\u043A\u0443 \u0432\u0430\u0448\u0435\u0433\u043E \u043C\u0430\u0441\u0442\u0435\u0440\u0430 \u2014 \u0438 \u0437\u0434\u0435\u0441\u044C \u043F\u043E\u044F\u0432\u0438\u0442\u0441\u044F \u0437\u0430\u043F\u0438\u0441\u044C \u043A \u043D\u0435\u043C\u0443."
   ].join("\n");
@@ -1160,29 +1210,31 @@ function register(b) {
       try {
         const { business, role } = await claimInvite(db(), payload.slice(4), uid);
         await setLastBusiness(db(), uid, business.id);
-        const kb = new InlineKeyboard().webApp("\u2699\uFE0F \u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043F\u0430\u043D\u0435\u043B\u044C \u0443\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u044F", webAppUrl({ b: business.slug, view: "admin" }));
+        const kb = new InlineKeyboard().webApp("\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043F\u0430\u043D\u0435\u043B\u044C \u0443\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u044F", webAppUrl({ b: business.slug, view: "admin" }));
         await ctx.reply(
           [
-            `\u{1F389} <b>\u0413\u043E\u0442\u043E\u0432\u043E!</b> \u0412\u044B ${role === "owner" ? "\u0432\u043B\u0430\u0434\u0435\u043B\u0435\u0446" : "\u0430\u0434\u043C\u0438\u043D\u0438\u0441\u0442\u0440\u0430\u0442\u043E\u0440"} \xAB${esc(business.name)}\xBB.`,
+            `<b>\u0413\u043E\u0442\u043E\u0432\u043E.</b> \u0412\u044B ${role === "owner" ? "\u0432\u043B\u0430\u0434\u0435\u043B\u0435\u0446" : "\u0430\u0434\u043C\u0438\u043D\u0438\u0441\u0442\u0440\u0430\u0442\u043E\u0440"} \xAB${esc(business.name)}\xBB.`,
             "",
             "\u0412 \u043F\u0430\u043D\u0435\u043B\u0438 \u043C\u043E\u0436\u043D\u043E \u043F\u043E\u043C\u0435\u043D\u044F\u0442\u044C \u0443\u0441\u043B\u0443\u0433\u0438, \u0446\u0435\u043D\u044B, \u0433\u0440\u0430\u0444\u0438\u043A \u0438 \u0442\u0435\u043A\u0441\u0442\u044B.",
             "",
-            "\u0421\u0441\u044B\u043B\u043A\u0430 \u0434\u043B\u044F \u043A\u043B\u0438\u0435\u043D\u0442\u043E\u0432 \u2014 \u043F\u043E\u0441\u0442\u0430\u0432\u044C\u0442\u0435 \u0435\u0451 \u0432 \u0448\u0430\u043F\u043A\u0443 \u043A\u0430\u043D\u0430\u043B\u0430, Instagram \u0438 \u0432 \u043E\u0442\u0432\u0435\u0442\u044B \u043A\u043B\u0438\u0435\u043D\u0442\u0430\u043C:",
-            esc(clientLink(business.slug)),
+            "<b>\u0421\u0441\u044B\u043B\u043A\u0430 \u0434\u043B\u044F \u043A\u043B\u0438\u0435\u043D\u0442\u043E\u0432</b>",
+            "<i>\u041F\u043E\u0441\u0442\u0430\u0432\u044C\u0442\u0435 \u0435\u0451 \u0432 \u0448\u0430\u043F\u043A\u0443 \u043A\u0430\u043D\u0430\u043B\u0430, Instagram \u0438 \u0432 \u043E\u0442\u0432\u0435\u0442\u044B \u043A\u043B\u0438\u0435\u043D\u0442\u0430\u043C:</i>",
+            `<code>${esc(clientLink(business.slug))}</code>`,
             "",
-            "\u0412\u0430\u0448\u0430 \u0441\u0441\u044B\u043B\u043A\u0430 \u043D\u0430 \u043F\u0430\u043D\u0435\u043B\u044C \u0443\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u044F (\u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u0435; \u0443 \u0434\u0440\u0443\u0433\u0438\u0445 \u043E\u043D\u0430 \u043E\u0442\u043A\u0440\u043E\u0435\u0442 \u043E\u0431\u044B\u0447\u043D\u0443\u044E \u0437\u0430\u043F\u0438\u0441\u044C):",
-            esc(adminLink(business.slug))
+            "<b>\u0412\u0430\u0448\u0430 \u0441\u0441\u044B\u043B\u043A\u0430 \u043D\u0430 \u043F\u0430\u043D\u0435\u043B\u044C \u0443\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u044F</b>",
+            "<i>\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u0435 \u0435\u0451. \u0423 \u0434\u0440\u0443\u0433\u0438\u0445 \u043B\u044E\u0434\u0435\u0439 \u043E\u043D\u0430 \u043E\u0442\u043A\u0440\u043E\u0435\u0442 \u043E\u0431\u044B\u0447\u043D\u0443\u044E \u0437\u0430\u043F\u0438\u0441\u044C.</i>",
+            `<code>${esc(adminLink(business.slug))}</code>`
           ].join("\n"),
           { parse_mode: "HTML", reply_markup: kb, link_preview_options: { is_disabled: true } }
         );
         if (role === "owner") {
           const { notifySuperadmins: notifySuperadmins2 } = await Promise.resolve().then(() => (init_notify(), notify_exports));
           await notifySuperadmins2(
-            `\u2705 \u041F\u0440\u0438\u0433\u043B\u0430\u0448\u0435\u043D\u0438\u0435 \u043F\u0440\u0438\u043D\u044F\u0442\u043E: \xAB${esc(business.name)}\xBB \u2192 <a href="tg://user?id=${uid}">${esc(ctx.from.first_name)}</a>`
+            `<b>\u041F\u0440\u0438\u0433\u043B\u0430\u0448\u0435\u043D\u0438\u0435 \u043F\u0440\u0438\u043D\u044F\u0442\u043E:</b> \xAB${esc(business.name)}\xBB \u2192 <a href="tg://user?id=${uid}">${esc(ctx.from.first_name)}</a>`
           );
         }
       } catch (e) {
-        await ctx.reply(e instanceof UserError ? `\u26A0\uFE0F ${e.message}` : "\u26A0\uFE0F \u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u0438\u043D\u044F\u0442\u044C \u043F\u0440\u0438\u0433\u043B\u0430\u0448\u0435\u043D\u0438\u0435");
+        await ctx.reply(e instanceof UserError ? e.message : "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u0438\u043D\u044F\u0442\u044C \u043F\u0440\u0438\u0433\u043B\u0430\u0448\u0435\u043D\u0438\u0435");
       }
       return;
     }
@@ -1195,8 +1247,8 @@ function register(b) {
         await touchClient(db(), business.id, ctx.from);
         return showBusiness(ctx, business);
       }
-      const kb = new InlineKeyboard().webApp("\u2699\uFE0F \u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043F\u0430\u043D\u0435\u043B\u044C \u0443\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u044F", webAppUrl({ b: business.slug, view: "admin" })).row().webApp("\u{1F441} \u041A\u0430\u043A \u0432\u0438\u0434\u044F\u0442 \u043A\u043B\u0438\u0435\u043D\u0442\u044B", webAppUrl({ b: business.slug }));
-      return ctx.reply(`\u041F\u0430\u043D\u0435\u043B\u044C \u0443\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u044F \xAB${esc(business.name)}\xBB`, { parse_mode: "HTML", reply_markup: kb });
+      const kb = new InlineKeyboard().webApp("\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043F\u0430\u043D\u0435\u043B\u044C \u0443\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u044F", webAppUrl({ b: business.slug, view: "admin" })).row().webApp("\u041A\u0430\u043A \u0432\u0438\u0434\u044F\u0442 \u043A\u043B\u0438\u0435\u043D\u0442\u044B", webAppUrl({ b: business.slug }));
+      return ctx.reply(`<b>\u041F\u0430\u043D\u0435\u043B\u044C \u0443\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u044F</b> \xB7 ${esc(business.name)}`, { parse_mode: "HTML", reply_markup: kb });
     }
     if (payload) {
       const business = await getBusiness(db(), payload);
@@ -1222,19 +1274,30 @@ function register(b) {
       "\u0417\u0430\u043F\u0438\u0441\u044C, \u043E\u0442\u043C\u0435\u043D\u0430 \u0438 \u043F\u0435\u0440\u0435\u043D\u043E\u0441 \u2014 \u0432 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0438 (\u043A\u043D\u043E\u043F\u043A\u0430 \xAB\u0417\u0430\u043F\u0438\u0441\u0430\u0442\u044C\u0441\u044F\xBB \u0432\u043D\u0438\u0437\u0443).\n/start \u2014 \u0433\u043B\u0430\u0432\u043D\u043E\u0435 \u043C\u0435\u043D\u044E\n/admin \u2014 \u043F\u0430\u043D\u0435\u043B\u044C \u0434\u043B\u044F \u0432\u043B\u0430\u0434\u0435\u043B\u044C\u0446\u0435\u0432 \u0431\u0438\u0437\u043D\u0435\u0441\u0430"
     )
   );
+  b.on("message:contact", async (ctx) => {
+    const c = ctx.message.contact;
+    if (c.user_id !== ctx.from.id) return;
+    const pc = checkPhone(c.phone_number.startsWith("+") ? c.phone_number : `+${c.phone_number}`);
+    if (!pc.ok) return;
+    const [u] = await db().query(`select last_business_id from users where tg_id = $1`, [ctx.from.id]);
+    if (u?.last_business_id) {
+      await db().query(`update clients set phone = $3 where business_id = $1 and tg_id = $2`, [u.last_business_id, ctx.from.id, pc.phone]);
+    }
+  });
   b.on("message", async (ctx) => {
     const [u] = await db().query(`select last_business_id from users where tg_id = $1`, [ctx.from.id]);
     const business = u?.last_business_id ? await getBusiness(db(), Number(u.last_business_id)) : null;
     if (!business) return showPlatform(ctx);
     const s = business.settings;
-    const contacts = [s.contactPhone && `\u{1F4DE} ${esc(s.contactPhone)}`, ...s.links.map((l) => `\u{1F517} <a href="${esc(l.url)}">${esc(l.title)}</a>`)].filter(Boolean).join("\n");
+    const contacts = [s.contactPhone && `<i>\u0422\u0435\u043B\u0435\u0444\u043E\u043D:</i> <code>${esc(s.contactPhone)}</code>`, ...s.links.map((l) => `<a href="${esc(l.url)}">${esc(l.title)}</a>`)].filter(Boolean).join("\n");
     await ctx.reply(
-      `\u042F \u0431\u043E\u0442 \u043E\u043D\u043B\u0430\u0439\u043D-\u0437\u0430\u043F\u0438\u0441\u0438 \xAB${esc(business.name)}\xBB \u0438 \u043D\u0435 \u0447\u0438\u0442\u0430\u044E \u043F\u0435\u0440\u0435\u043F\u0438\u0441\u043A\u0443 \u{1F642}${contacts ? `
-\u0421\u0432\u044F\u0437\u0430\u0442\u044C\u0441\u044F \u043D\u0430\u043F\u0440\u044F\u043C\u0443\u044E:
+      `\u042F \u0431\u043E\u0442 \u043E\u043D\u043B\u0430\u0439\u043D-\u0437\u0430\u043F\u0438\u0441\u0438 \xAB${esc(business.name)}\xBB \u0438 \u043D\u0435 \u0447\u0438\u0442\u0430\u044E \u043F\u0435\u0440\u0435\u043F\u0438\u0441\u043A\u0443.${contacts ? `
+
+<b>\u0421\u0432\u044F\u0437\u0430\u0442\u044C\u0441\u044F \u043D\u0430\u043F\u0440\u044F\u043C\u0443\u044E</b>
 ${contacts}` : ""}`,
       {
         parse_mode: "HTML",
-        reply_markup: new InlineKeyboard().webApp("\u{1F4C5} \u0417\u0430\u043F\u0438\u0441\u0430\u0442\u044C\u0441\u044F", webAppUrl({ b: business.slug })),
+        reply_markup: new InlineKeyboard().webApp("\u0417\u0430\u043F\u0438\u0441\u0430\u0442\u044C\u0441\u044F", webAppUrl({ b: business.slug })),
         link_preview_options: { is_disabled: true }
       }
     );
@@ -1478,12 +1541,12 @@ async function saveService(ctx, p) {
     if (!rows.length) throw new UserError("\u0423\u0441\u043B\u0443\u0433\u0430 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u0430");
     return rows[0];
   }
-  const [row] = await db().query(
+  const [row2] = await db().query(
     `insert into services (business_id, title, description, price, price_from, duration_min, active, sort)
      values ($1,$2,$3,$4,$5,$6,$7,$8) returning *`,
     [ctx.business.id, ...vals]
   );
-  return row;
+  return row2;
 }
 async function deleteService(ctx, p) {
   await db().query(`delete from services where id = $1 and business_id = $2`, [int(p.id, "id"), ctx.business.id]);
@@ -1523,11 +1586,11 @@ async function saveStaff(ctx, p) {
     if (!rows.length) throw new UserError("\u041D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u043E");
     return rows[0];
   }
-  const [row] = await db().query(
+  const [row2] = await db().query(
     `insert into staff (business_id, name, description, tg_id, work_hours, active, sort) values ($1,$2,$3,$4,$5,$6,$7) returning *`,
     [ctx.business.id, ...vals]
   );
-  return row;
+  return row2;
 }
 async function deleteStaff(ctx, p) {
   const id = int(p.id, "id");
@@ -1568,16 +1631,16 @@ async function addTimeOff(ctx, p) {
     if (end <= start) throw new UserError("\u041A\u043E\u043D\u0435\u0446 \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043F\u043E\u0437\u0436\u0435 \u043D\u0430\u0447\u0430\u043B\u0430");
   }
   const staffId = p.staffId ? int(p.staffId, "staffId") : null;
-  const [row] = await db().query(
+  const [row2] = await db().query(
     `insert into time_off (business_id, staff_id, starts_at, ends_at, reason) values ($1,$2,$3,$4,$5) returning *`,
     [ctx.business.id, staffId, start.toUTC().toISO(), end.toUTC().toISO(), str(p.reason, 100)]
   );
   const conflicts = await db().query(
     `select count(*)::int as n from bookings where business_id = $1 and status = 'confirmed'
      and starts_at < $3 and ends_at > $2 and ($4::bigint is null or staff_id = $4)`,
-    [ctx.business.id, row.starts_at, row.ends_at, staffId]
+    [ctx.business.id, row2.starts_at, row2.ends_at, staffId]
   );
-  return { ...row, conflicts: conflicts[0].n };
+  return { ...row2, conflicts: conflicts[0].n };
 }
 async function removeTimeOff(ctx, p) {
   await db().query(`delete from time_off where id = $1 and business_id = $2`, [int(p.id, "id"), ctx.business.id]);
@@ -1642,13 +1705,13 @@ async function portfolioAdd(ctx, p) {
   const { file_id } = await tg().sendPhoto(
     ctx.init.user.id,
     new Uint8Array(buf),
-    `\u{1F5BC} \u0414\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u043E \u0432 \u043F\u043E\u0440\u0442\u0444\u043E\u043B\u0438\u043E \xAB${ctx.business.name}\xBB`
+    `\u0414\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u043E \u0432 \u043F\u043E\u0440\u0442\u0444\u043E\u043B\u0438\u043E \xAB${ctx.business.name}\xBB`
   );
-  const [row] = await db().query(
+  const [row2] = await db().query(
     `insert into portfolio (business_id, file_id, caption, sort) values ($1, $2, $3, $4) returning id, caption`,
     [ctx.business.id, file_id, str(p.caption, 200), 0]
   );
-  return row;
+  return row2;
 }
 async function portfolioRemove(ctx, p) {
   await db().query(`delete from portfolio where id = $1 and business_id = $2`, [int(p.id, "id"), ctx.business.id]);
@@ -1660,7 +1723,7 @@ async function bannerSet(ctx, p) {
   if (buf.length < 1e3) throw new UserError("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u0442\u044C \u0444\u043E\u0442\u043E");
   if (buf.length > 35e5) throw new UserError("\u0424\u043E\u0442\u043E \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u0431\u043E\u043B\u044C\u0448\u043E\u0435");
   const color = /^#[0-9a-f]{6}$/i.test(String(p.color ?? "")) ? String(p.color).toLowerCase() : "";
-  const { file_id } = await tg().sendPhoto(ctx.init.user.id, new Uint8Array(buf), `\u{1F5BC} \u041D\u043E\u0432\u044B\u0439 \u0431\u0430\u043D\u043D\u0435\u0440 \xAB${ctx.business.name}\xBB`);
+  const { file_id } = await tg().sendPhoto(ctx.init.user.id, new Uint8Array(buf), `\u041D\u043E\u0432\u044B\u0439 \u0431\u0430\u043D\u043D\u0435\u0440 \xAB${ctx.business.name}\xBB`);
   const b = await updateBusiness(db(), ctx.business.id, { settings: { bannerFileId: file_id, bannerColor: color } });
   return publicBusiness(b);
 }
@@ -1832,9 +1895,9 @@ async function photo(url) {
   const bannerOf = url.searchParams.get("banner");
   const id = Number(bannerOf ?? url.searchParams.get("id"));
   if (!Number.isInteger(id)) return new Response("bad id", { status: 400 });
-  const [row] = bannerOf ? await db().query(`select settings->>'bannerFileId' as file_id from businesses where id = $1`, [id]) : await db().query(`select file_id from portfolio where id = $1`, [id]);
-  if (!row?.file_id) return new Response("not found", { status: 404 });
-  const file = await rawApi().getFile(row.file_id);
+  const [row2] = bannerOf ? await db().query(`select settings->>'bannerFileId' as file_id from businesses where id = $1`, [id]) : await db().query(`select file_id from portfolio where id = $1`, [id]);
+  if (!row2?.file_id) return new Response("not found", { status: 404 });
+  const file = await rawApi().getFile(row2.file_id);
   const res = await fetch(`https://api.telegram.org/file/bot${config.botToken}/${file.file_path}`);
   if (!res.ok) return new Response("upstream error", { status: 502 });
   return new Response(res.body, {

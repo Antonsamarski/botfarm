@@ -71,7 +71,7 @@ describe("запись", () => {
     const svc = await firstService();
     const start = "2026-11-02T07:00:00.000Z"; // 10:00 МСК
     const mk = (tgId: number) =>
-      createBooking(db, { business: biz, serviceId: svc.id, start, client: { tgId, name: "Клиент", phone: "+79990000000" }, now });
+      createBooking(db, { business: biz, serviceId: svc.id, start, client: { tgId, name: "Клиент", phone: "+79991234588" }, now });
     const results = await Promise.allSettled([mk(1), mk(2)]);
     const ok = results.filter((r) => r.status === "fulfilled");
     const fail = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
@@ -85,7 +85,7 @@ describe("запись", () => {
       business: biz,
       serviceId: svc.id,
       start: "2026-11-02T08:00:00.000Z", // 11:00–13:00 МСК
-      client: { tgId: 1, name: "Аня", phone: "+7999" },
+      client: { tgId: 1, name: "Аня", phone: "+79171234567" },
       now,
     });
     const av = await availability(db, { business: biz, serviceId: svc.id, days: 1, now });
@@ -98,7 +98,7 @@ describe("запись", () => {
   it("отклоняет время вне сетки и прошлое", async () => {
     const svc = await firstService();
     const bad = (start: string) =>
-      createBooking(db, { business: biz, serviceId: svc.id, start, client: { tgId: 1, name: "Аня", phone: "+7999" }, now });
+      createBooking(db, { business: biz, serviceId: svc.id, start, client: { tgId: 1, name: "Аня", phone: "+79171234567" }, now });
     await expect(bad("2026-11-02T04:00:00.000Z")).rejects.toThrow(BookingConflict); // 07:00 — до открытия
     await expect(bad("2026-11-01T08:00:00.000Z")).rejects.toThrow(BookingConflict); // вчера
   });
@@ -109,7 +109,7 @@ describe("запись", () => {
       business: biz,
       serviceId: svc.id,
       start: "2026-11-02T10:00:00.000Z",
-      client: { tgId: 1, name: "Аня", phone: "+7999" },
+      client: { tgId: 1, name: "Аня", phone: "+79171234567" },
       now,
     });
     await expect(cancelBooking(db, { bookingId: b.id, business: biz, by: "client", tgId: 2, now })).rejects.toThrow("не ваша");
@@ -122,7 +122,7 @@ describe("запись", () => {
       business: biz,
       serviceId: svc.id,
       start: "2026-11-02T10:00:00.000Z",
-      client: { tgId: 3, name: "Оля", phone: "+7998" },
+      client: { tgId: 3, name: "Оля", phone: "+79271234567" },
       now,
     });
     expect(again.id).toBeGreaterThan(b.id);
@@ -133,7 +133,7 @@ describe("запись", () => {
     const [svc] = await db.query(`select * from services where business_id = $1 order by sort`, [barber.id]);
     const start = "2026-11-03T10:00:00.000Z"; // вт 13:00 МСК, работают оба
     const mk = (tgId: number) =>
-      createBooking(db, { business: barber, serviceId: svc.id, start, client: { tgId, name: "Иван", phone: "+7" }, now });
+      createBooking(db, { business: barber, serviceId: svc.id, start, client: { tgId, name: "Иван", phone: "89371234567" }, now });
     const a = await mk(1);
     const b = await mk(2);
     expect(a.staff_id).not.toBe(b.staff_id);
@@ -148,7 +148,7 @@ describe("запись", () => {
         business: auto,
         serviceId: svc.id,
         start: "2026-11-02T08:00:00.000Z",
-        client: { tgId: 1, name: "Антон", phone: "+7" },
+        client: { tgId: 1, name: "Антон", phone: "89371234567" },
         now,
       }),
     ).rejects.toThrow("Марка и модель");

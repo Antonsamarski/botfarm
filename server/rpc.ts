@@ -394,7 +394,7 @@ async function portfolioAdd(ctx: BizCtx, p: P) {
   const { file_id } = await tg().sendPhoto(
     ctx.init.user.id,
     new Uint8Array(buf),
-    `🖼 Добавлено в портфолио «${ctx.business.name}»`,
+    `Добавлено в портфолио «${ctx.business.name}»`,
   );
   const [row] = await db().query(
     `insert into portfolio (business_id, file_id, caption, sort) values ($1, $2, $3, $4) returning id, caption`,
@@ -415,7 +415,7 @@ async function bannerSet(ctx: BizCtx, p: P) {
   if (buf.length < 1000) throw new UserError("Не удалось прочитать фото");
   if (buf.length > 3_500_000) throw new UserError("Фото слишком большое");
   const color = /^#[0-9a-f]{6}$/i.test(String(p.color ?? "")) ? String(p.color).toLowerCase() : "";
-  const { file_id } = await tg().sendPhoto(ctx.init.user.id, new Uint8Array(buf), `🖼 Новый баннер «${ctx.business.name}»`);
+  const { file_id } = await tg().sendPhoto(ctx.init.user.id, new Uint8Array(buf), `Новый баннер «${ctx.business.name}»`);
   const b = await store.updateBusiness(db(), ctx.business.id, { settings: { bannerFileId: file_id, bannerColor: color } });
   return publicBusiness(b);
 }

@@ -80,12 +80,24 @@ describe("клиентский путь", () => {
     const slot = av[firstDay][0];
     const res: any = await call(
       "book",
-      { businessId: biz.id, serviceId: service.id, start: slot.start, name: "Оля", phone: "+79991112233" },
+      { businessId: biz.id, serviceId: service.id, start: slot.start, name: "Оля", phone: "+79991112234" },
       as(300),
     );
     expect(res.id).toBeGreaterThan(0);
-    expect(sent.find((m) => m.chatId === 200)?.html).toContain("Новая запись");
-    expect(sent.find((m) => m.chatId === 300)?.html).toContain("Вы записаны");
+    const toAdmin = sent.find((m) => m.chatId === 200)?.html ?? "";
+    const toClient = sent.find((m) => m.chatId === 300)?.html ?? "";
+    expect(toAdmin).toContain("Новая запись");
+    expect(toAdmin).toContain("<code>+7 (999) 111-22-34</code>"); // номер приведён к одному виду
+    expect(toClient).toContain("Вы записаны");
+    // без эмодзи — только форматирование
+    const emoji = /\p{Extended_Pictographic}/u;
+    expect(emoji.test(toAdmin) || emoji.test(toClient)).toBe(false);
+
+    // явно ненастоящий номер не принимается
+    const slot2 = av[firstDay][av[firstDay].length - 1];
+    await expect(
+      call("book", { businessId: biz.id, serviceId: service.id, start: slot2.start, name: "Оля", phone: "+7 999 999-99-99" }, as(301)),
+    ).rejects.toThrow("Проверьте номер");
 
     const mine: any = await call("myBookings", { businessId: biz.id }, as(300));
     expect(mine.length).toBe(1);
@@ -100,7 +112,7 @@ describe("клиентский путь", () => {
     const slot = av[Object.keys(av)[0]][0];
     const { id } = (await call(
       "book",
-      { businessId: biz.id, serviceId: service.id, start: slot.start, name: "<script>", phone: "+7999" },
+      { businessId: biz.id, serviceId: service.id, start: slot.start, name: "<script>", phone: "+79171234567" },
       as(300),
     )) as any;
     sent = [];
