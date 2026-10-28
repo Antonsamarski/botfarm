@@ -23,6 +23,7 @@ export interface Settings {
   requirePhone: boolean;
   remind2h: boolean;
   fields: Field[];
+  bannerFileId?: string;
 }
 
 export interface Service {

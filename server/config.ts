@@ -69,6 +69,9 @@ export function clientLink(slug: string): string {
 
 export const inviteLink = (code: string) => `https://t.me/${config.botUsername}?start=inv_${code}`;
 
+/** Постоянная ссылка на панель бизнеса. Прав не даёт: без роли откроется обычная клиентская часть. */
+export const adminLink = (slug: string) => `https://t.me/${config.botUsername}?start=adm_${slug}`;
+
 /** URL Mini App с выбранным бизнесом и экраном. */
 export function webAppUrl(params: { b?: string; view?: string } = {}): string {
   const q = new URLSearchParams();

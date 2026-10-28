@@ -156,6 +156,10 @@ export function duration(min: number): string {
 
 export const photoUrl = (id: number) => `/api/photo?id=${id}`;
 
+/** Баннер бизнеса; хвост file_id в адресе сбрасывает кэш при замене фото. */
+export const bannerUrl = (businessId: number, fileId?: string) =>
+  fileId ? `/api/photo?banner=${businessId}&v=${encodeURIComponent(fileId.slice(-12))}` : null;
+
 /** Сжать фото в браузере перед загрузкой (≤1600px, JPEG). */
 export async function compressImage(file: File, max = 1600): Promise<string> {
   const bmp = await createImageBitmap(file);

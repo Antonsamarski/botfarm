@@ -25,6 +25,8 @@ export interface BusinessSettings {
   requirePhone: boolean;
   remind2h: boolean;
   fields: Field[];
+  /** Баннер главной страницы: file_id фото в Telegram ("" — нет баннера) */
+  bannerFileId: string;
 }
 
 export interface Template {
@@ -58,6 +60,7 @@ const baseSettings = (over: Partial<BusinessSettings>): BusinessSettings => ({
   requirePhone: true,
   remind2h: true,
   fields: [],
+  bannerFileId: "",
   ...over,
 });
 

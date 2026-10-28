@@ -31,7 +31,7 @@ function webAppUrl(params = {}) {
   const s = q.toString();
   return `${config.publicUrl}/${s ? `?${s}` : ""}`;
 }
-var env, runtime, derived, config, inviteLink;
+var env, runtime, derived, config, inviteLink, adminLink;
 var init_config = __esm({
   "server/config.ts"() {
     "use strict";
@@ -74,6 +74,7 @@ var init_config = __esm({
       }
     };
     inviteLink = (code) => `https://t.me/${config.botUsername}?start=inv_${code}`;
+    adminLink = (slug) => `https://t.me/${config.botUsername}?start=adm_${slug}`;
   }
 });
 
@@ -600,6 +601,7 @@ var baseSettings = (over) => ({
   requirePhone: true,
   remind2h: true,
   fields: [],
+  bannerFileId: "",
   ...over
 });
 var TEMPLATES = [
@@ -1138,15 +1140,12 @@ async function showPlatform(ctx) {
   const kb = new InlineKeyboard();
   for (const b of adminOf.slice(0, 5)) kb.webApp(`\u2699\uFE0F ${b.name}`, webAppUrl({ b: b.slug, view: "admin" })).row();
   if (isSuper(uid)) kb.webApp("\u{1F451} \u041F\u0430\u043D\u0435\u043B\u044C \u043F\u043B\u0430\u0442\u0444\u043E\u0440\u043C\u044B", webAppUrl({ view: "super" })).row();
-  kb.webApp("\u{1F680} \u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u044C \u0441\u0432\u043E\u0439 \u0431\u0438\u0437\u043D\u0435\u0441", webAppUrl({ view: "onboard" }));
-  const text = adminOf.length ? "\u0412\u0430\u0448\u0438 \u0431\u0438\u0437\u043D\u0435\u0441\u044B \u2014 \u0432\u044B\u0431\u0435\u0440\u0438\u0442\u0435, \u0447\u0442\u043E\u0431\u044B \u043E\u0442\u043A\u0440\u044B\u0442\u044C \u043F\u0430\u043D\u0435\u043B\u044C \u0443\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u044F:" : [
-    "\u{1F44B} <b>\u041E\u043D\u043B\u0430\u0439\u043D-\u0437\u0430\u043F\u0438\u0441\u044C \u0434\u043B\u044F \u043C\u0430\u043B\u043E\u0433\u043E \u0431\u0438\u0437\u043D\u0435\u0441\u0430 \u2014 \u0431\u0435\u0441\u043F\u043B\u0430\u0442\u043D\u043E</b>",
+  const text = adminOf.length || isSuper(uid) ? "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435, \u0447\u0442\u043E \u043E\u0442\u043A\u0440\u044B\u0442\u044C:" : [
+    "\u{1F44B} <b>\u041E\u043D\u043B\u0430\u0439\u043D-\u0437\u0430\u043F\u0438\u0441\u044C</b>",
     "",
-    "\u0415\u0441\u043B\u0438 \u0432\u044B \u043A\u043B\u0438\u0435\u043D\u0442 \u2014 \u043E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u0441\u0441\u044B\u043B\u043A\u0443 \u0432\u0430\u0448\u0435\u0433\u043E \u043C\u0430\u0441\u0442\u0435\u0440\u0430, \u0438 \u0437\u0434\u0435\u0441\u044C \u043F\u043E\u044F\u0432\u0438\u0442\u0441\u044F \u0437\u0430\u043F\u0438\u0441\u044C \u043A \u043D\u0435\u043C\u0443.",
-    "",
-    "\u0415\u0441\u043B\u0438 \u0432\u044B \u043C\u0430\u0441\u0442\u0435\u0440 \u0438\u043B\u0438 \u043F\u0440\u0435\u0434\u043F\u0440\u0438\u043D\u0438\u043C\u0430\u0442\u0435\u043B\u044C \u2014 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u0435 \u0441\u0432\u043E\u0439 \u0431\u0438\u0437\u043D\u0435\u0441 \u0437\u0430 \u043C\u0438\u043D\u0443\u0442\u0443: \u0443\u0441\u043B\u0443\u0433\u0438, \u0433\u0440\u0430\u0444\u0438\u043A, \u043D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u044F \u043A\u043B\u0438\u0435\u043D\u0442\u0430\u043C, \u0440\u0430\u0441\u0441\u044B\u043B\u043A\u0438."
+    "\u0427\u0442\u043E\u0431\u044B \u0437\u0430\u043F\u0438\u0441\u0430\u0442\u044C\u0441\u044F, \u043E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u0441\u0441\u044B\u043B\u043A\u0443 \u0432\u0430\u0448\u0435\u0433\u043E \u043C\u0430\u0441\u0442\u0435\u0440\u0430 \u2014 \u0438 \u0437\u0434\u0435\u0441\u044C \u043F\u043E\u044F\u0432\u0438\u0442\u0441\u044F \u0437\u0430\u043F\u0438\u0441\u044C \u043A \u043D\u0435\u043C\u0443."
   ].join("\n");
-  await ctx.reply(text, { parse_mode: "HTML", reply_markup: kb });
+  await ctx.reply(text, { parse_mode: "HTML", reply_markup: adminOf.length || isSuper(uid) ? kb : void 0 });
 }
 function register(b) {
   b.use(async (ctx, next) => {
@@ -1165,8 +1164,13 @@ function register(b) {
           [
             `\u{1F389} <b>\u0413\u043E\u0442\u043E\u0432\u043E!</b> \u0412\u044B ${role === "owner" ? "\u0432\u043B\u0430\u0434\u0435\u043B\u0435\u0446" : "\u0430\u0434\u043C\u0438\u043D\u0438\u0441\u0442\u0440\u0430\u0442\u043E\u0440"} \xAB${esc(business.name)}\xBB.`,
             "",
-            "\u0412 \u043F\u0430\u043D\u0435\u043B\u0438 \u043C\u043E\u0436\u043D\u043E \u043F\u043E\u043C\u0435\u043D\u044F\u0442\u044C \u0443\u0441\u043B\u0443\u0433\u0438, \u0446\u0435\u043D\u044B, \u0433\u0440\u0430\u0444\u0438\u043A \u0438 \u0442\u0435\u043A\u0441\u0442\u044B. \u0421\u0441\u044B\u043B\u043A\u0430 \u0434\u043B\u044F \u043A\u043B\u0438\u0435\u043D\u0442\u043E\u0432 \u2014 \u0435\u0451 \u043C\u043E\u0436\u043D\u043E \u043F\u043E\u0441\u0442\u0430\u0432\u0438\u0442\u044C \u0432 \u0448\u0430\u043F\u043A\u0443 \u043A\u0430\u043D\u0430\u043B\u0430, Instagram \u0438 \u0432 \u043E\u0442\u0432\u0435\u0442\u044B \u043A\u043B\u0438\u0435\u043D\u0442\u0430\u043C:",
-            esc(clientLink(business.slug))
+            "\u0412 \u043F\u0430\u043D\u0435\u043B\u0438 \u043C\u043E\u0436\u043D\u043E \u043F\u043E\u043C\u0435\u043D\u044F\u0442\u044C \u0443\u0441\u043B\u0443\u0433\u0438, \u0446\u0435\u043D\u044B, \u0433\u0440\u0430\u0444\u0438\u043A \u0438 \u0442\u0435\u043A\u0441\u0442\u044B.",
+            "",
+            "\u0421\u0441\u044B\u043B\u043A\u0430 \u0434\u043B\u044F \u043A\u043B\u0438\u0435\u043D\u0442\u043E\u0432 \u2014 \u043F\u043E\u0441\u0442\u0430\u0432\u044C\u0442\u0435 \u0435\u0451 \u0432 \u0448\u0430\u043F\u043A\u0443 \u043A\u0430\u043D\u0430\u043B\u0430, Instagram \u0438 \u0432 \u043E\u0442\u0432\u0435\u0442\u044B \u043A\u043B\u0438\u0435\u043D\u0442\u0430\u043C:",
+            esc(clientLink(business.slug)),
+            "",
+            "\u0412\u0430\u0448\u0430 \u0441\u0441\u044B\u043B\u043A\u0430 \u043D\u0430 \u043F\u0430\u043D\u0435\u043B\u044C \u0443\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u044F (\u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u0435; \u0443 \u0434\u0440\u0443\u0433\u0438\u0445 \u043E\u043D\u0430 \u043E\u0442\u043A\u0440\u043E\u0435\u0442 \u043E\u0431\u044B\u0447\u043D\u0443\u044E \u0437\u0430\u043F\u0438\u0441\u044C):",
+            esc(adminLink(business.slug))
           ].join("\n"),
           { parse_mode: "HTML", reply_markup: kb, link_preview_options: { is_disabled: true } }
         );
@@ -1180,6 +1184,18 @@ function register(b) {
         await ctx.reply(e instanceof UserError ? `\u26A0\uFE0F ${e.message}` : "\u26A0\uFE0F \u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u0438\u043D\u044F\u0442\u044C \u043F\u0440\u0438\u0433\u043B\u0430\u0448\u0435\u043D\u0438\u0435");
       }
       return;
+    }
+    if (payload.startsWith("adm_")) {
+      const business = await getBusiness(db(), payload.slice(4));
+      if (!business) return showPlatform(ctx);
+      const role = await roleFor(db(), uid, business.id, config.superadmins);
+      await setLastBusiness(db(), uid, business.id);
+      if (!role) {
+        await touchClient(db(), business.id, ctx.from);
+        return showBusiness(ctx, business);
+      }
+      const kb = new InlineKeyboard().webApp("\u2699\uFE0F \u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043F\u0430\u043D\u0435\u043B\u044C \u0443\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u044F", webAppUrl({ b: business.slug, view: "admin" })).row().webApp("\u{1F441} \u041A\u0430\u043A \u0432\u0438\u0434\u044F\u0442 \u043A\u043B\u0438\u0435\u043D\u0442\u044B", webAppUrl({ b: business.slug }));
+      return ctx.reply(`\u041F\u0430\u043D\u0435\u043B\u044C \u0443\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u044F \xAB${esc(business.name)}\xBB`, { parse_mode: "HTML", reply_markup: kb });
     }
     if (payload) {
       const business = await getBusiness(db(), payload);
@@ -1279,7 +1295,6 @@ async function runReminders(now = /* @__PURE__ */ new Date()) {
 // server/rpc.ts
 init_config();
 import { DateTime as DateTime5 } from "luxon";
-init_format();
 init_notify();
 init_telegram();
 var int = (v, name) => {
@@ -1292,7 +1307,7 @@ function publicBusiness(b) {
   return { id: b.id, slug: b.slug, name: b.name, template: b.template, status: b.status, timezone: b.timezone, settings: b.settings };
 }
 function links(b) {
-  return { client: clientLink(b.slug), botStart: `https://t.me/${config.botUsername}?start=${b.slug}` };
+  return { client: clientLink(b.slug), admin: adminLink(b.slug), botStart: `https://t.me/${config.botUsername}?start=${b.slug}` };
 }
 async function catalog(b) {
   const [services, staff, portfolio] = await Promise.all([
@@ -1400,24 +1415,6 @@ async function cancelMy(ctx, p) {
   });
   await onBookingCancelled(db(), b, res);
   return { ok: true };
-}
-async function createOwnBusiness(ctx, p) {
-  const u = ctx.init.user;
-  const isSuper2 = config.superadmins.includes(u.id);
-  const owned = await db().query(`select count(*)::int as n from business_admins where tg_id = $1 and role = 'owner'`, [u.id]);
-  if (!isSuper2 && owned[0].n >= 3) throw new UserError("\u041C\u043E\u0436\u043D\u043E \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u044C \u0434\u043E 3 \u0431\u0438\u0437\u043D\u0435\u0441\u043E\u0432. \u041D\u0430\u043F\u0438\u0448\u0438\u0442\u0435 \u043D\u0430\u043C, \u0435\u0441\u043B\u0438 \u043D\u0443\u0436\u043D\u043E \u0431\u043E\u043B\u044C\u0448\u0435.");
-  const b = await createBusinessFromTemplate(db(), {
-    templateId: str(p.templateId, 30),
-    name: str(p.name, 80),
-    ownerTgId: u.id,
-    createdBy: u.id
-  });
-  await notifySuperadmins(
-    `\u{1F195} <b>\u041D\u043E\u0432\u044B\u0439 \u0431\u0438\u0437\u043D\u0435\u0441</b>: ${esc(b.name)} (${esc(b.template)})
-\u0412\u043B\u0430\u0434\u0435\u043B\u0435\u0446: <a href="tg://user?id=${u.id}">${esc(u.first_name)}</a>${u.username ? ` @${esc(u.username)}` : ""}
-${esc(clientLink(b.slug))}`
-  );
-  return { slug: b.slug, links: links(b) };
 }
 async function adminOverview(ctx) {
   const b = ctx.business;
@@ -1650,6 +1647,19 @@ async function portfolioRemove(ctx, p) {
   await db().query(`delete from portfolio where id = $1 and business_id = $2`, [int(p.id, "id"), ctx.business.id]);
   return { ok: true };
 }
+async function bannerSet(ctx, p) {
+  const b64 = String(p.imageBase64 ?? "").replace(/^data:image\/\w+;base64,/, "");
+  const buf = Buffer.from(b64, "base64");
+  if (buf.length < 1e3) throw new UserError("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u0442\u044C \u0444\u043E\u0442\u043E");
+  if (buf.length > 35e5) throw new UserError("\u0424\u043E\u0442\u043E \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u0431\u043E\u043B\u044C\u0448\u043E\u0435");
+  const { file_id } = await tg().sendPhoto(ctx.init.user.id, new Uint8Array(buf), `\u{1F5BC} \u041D\u043E\u0432\u044B\u0439 \u0431\u0430\u043D\u043D\u0435\u0440 \xAB${ctx.business.name}\xBB`);
+  const b = await updateBusiness(db(), ctx.business.id, { settings: { bannerFileId: file_id } });
+  return publicBusiness(b);
+}
+async function bannerRemove(ctx) {
+  const b = await updateBusiness(db(), ctx.business.id, { settings: { bannerFileId: "" } });
+  return publicBusiness(b);
+}
 async function adminClients(ctx) {
   return db().query(
     `select c.tg_id, c.name, c.phone, c.last_seen, c.blocked_bot,
@@ -1689,7 +1699,7 @@ async function adminBroadcast(ctx, p) {
 }
 async function superList() {
   const [businesses, stats] = await Promise.all([allBusinesses(db()), platformStats(db())]);
-  return { businesses: businesses.map((b) => ({ ...b, links: { client: clientLink(b.slug) } })), stats };
+  return { businesses: businesses.map((b) => ({ ...b, links: { client: clientLink(b.slug), admin: adminLink(b.slug) } })), stats };
 }
 async function superCreate(ctx, p) {
   const b = await createBusinessFromTemplate(db(), {
@@ -1720,7 +1730,6 @@ var methods = {
   book: { need: "user", fn: book },
   myBookings: { need: "user", fn: myBookings },
   cancelMy: { need: "user", fn: cancelMy },
-  createOwnBusiness: { need: "user", fn: createOwnBusiness },
   "admin.overview": { need: "admin", fn: adminOverview },
   "admin.bookings": { need: "admin", fn: adminBookings },
   "admin.cancelBooking": { need: "admin", fn: adminCancelBooking },
@@ -1735,6 +1744,8 @@ var methods = {
   "admin.saveSettings": { need: "admin", fn: saveSettings },
   "admin.portfolio": { need: "admin", fn: (ctx) => listPortfolio(db(), ctx.business.id).then((l) => l.map(({ id, caption }) => ({ id, caption }))) },
   "admin.portfolioAdd": { need: "admin", fn: portfolioAdd },
+  "admin.bannerSet": { need: "admin", fn: bannerSet },
+  "admin.bannerRemove": { need: "admin", fn: bannerRemove },
   "admin.portfolioRemove": { need: "admin", fn: portfolioRemove },
   "admin.clients": { need: "admin", fn: adminClients },
   "admin.invite": { need: "admin", fn: adminInvite },
@@ -1810,10 +1821,11 @@ async function rpc(req) {
   }
 }
 async function photo(url) {
-  const id = Number(url.searchParams.get("id"));
+  const bannerOf = url.searchParams.get("banner");
+  const id = Number(bannerOf ?? url.searchParams.get("id"));
   if (!Number.isInteger(id)) return new Response("bad id", { status: 400 });
-  const [row] = await db().query(`select file_id from portfolio where id = $1`, [id]);
-  if (!row) return new Response("not found", { status: 404 });
+  const [row] = bannerOf ? await db().query(`select settings->>'bannerFileId' as file_id from businesses where id = $1`, [id]) : await db().query(`select file_id from portfolio where id = $1`, [id]);
+  if (!row?.file_id) return new Response("not found", { status: 404 });
   const file = await rawApi().getFile(row.file_id);
   const res = await fetch(`https://api.telegram.org/file/bot${config.botToken}/${file.file_path}`);
   if (!res.ok) return new Response("upstream error", { status: 502 });
@@ -1848,7 +1860,7 @@ async function status() {
   } catch (e) {
     return json({ ok: false, db: false, error: String(e?.message ?? e).replace(/postgres(ql)?:\/\/[^\s]+/g, "<url>") }, 500);
   }
-  const info = config.botToken ? await rawApi().getWebhookInfo() : null;
+  const info = config.botToken ? await rawApi().getWebhookInfo().catch(() => null) : null;
   return json({
     ok: true,
     db: true,

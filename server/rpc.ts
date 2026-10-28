@@ -1,6 +1,6 @@
 import { DateTime } from "luxon";
 import { type InitData } from "./auth.js";
-import { clientLink, config, inviteLink, webAppUrl } from "./config.js";
+import { adminLink, clientLink, config, inviteLink, webAppUrl } from "./config.js";
 import { db } from "./db.js";
 import { esc } from "./format.js";
 import * as notify from "./notify.js";
@@ -34,7 +34,7 @@ function publicBusiness(b: Business) {
 }
 
 function links(b: Business) {
-  return { client: clientLink(b.slug), botStart: `https://t.me/${config.botUsername}?start=${b.slug}` };
+  return { client: clientLink(b.slug), admin: adminLink(b.slug), botStart: `https://t.me/${config.botUsername}?start=${b.slug}` };
 }
 
 async function catalog(b: Business) {
@@ -161,23 +161,6 @@ async function cancelMy(ctx: Ctx, p: P) {
   });
   await notify.onBookingCancelled(db(), b, res);
   return { ok: true };
-}
-
-async function createOwnBusiness(ctx: Ctx, p: P) {
-  const u = ctx.init.user;
-  const isSuper = config.superadmins.includes(u.id);
-  const owned = await db().query(`select count(*)::int as n from business_admins where tg_id = $1 and role = 'owner'`, [u.id]);
-  if (!isSuper && owned[0].n >= 3) throw new UserError("Можно подключить до 3 бизнесов. Напишите нам, если нужно больше.");
-  const b = await store.createBusinessFromTemplate(db(), {
-    templateId: str(p.templateId, 30),
-    name: str(p.name, 80),
-    ownerTgId: u.id,
-    createdBy: u.id,
-  });
-  await notify.notifySuperadmins(
-    `🆕 <b>Новый бизнес</b>: ${esc(b.name)} (${esc(b.template)})\nВладелец: <a href="tg://user?id=${u.id}">${esc(u.first_name)}</a>${u.username ? ` @${esc(u.username)}` : ""}\n${esc(clientLink(b.slug))}`,
-  );
-  return { slug: b.slug, links: links(b) };
 }
 
 // ---------------- методы админа бизнеса ----------------
@@ -416,6 +399,22 @@ async function portfolioRemove(ctx: BizCtx, p: P) {
   return { ok: true };
 }
 
+/** Баннер главной: фото хранится в Telegram, как портфолио. */
+async function bannerSet(ctx: BizCtx, p: P) {
+  const b64 = String(p.imageBase64 ?? "").replace(/^data:image\/\w+;base64,/, "");
+  const buf = Buffer.from(b64, "base64");
+  if (buf.length < 1000) throw new UserError("Не удалось прочитать фото");
+  if (buf.length > 3_500_000) throw new UserError("Фото слишком большое");
+  const { file_id } = await tg().sendPhoto(ctx.init.user.id, new Uint8Array(buf), `🖼 Новый баннер «${ctx.business.name}»`);
+  const b = await store.updateBusiness(db(), ctx.business.id, { settings: { bannerFileId: file_id } });
+  return publicBusiness(b);
+}
+
+async function bannerRemove(ctx: BizCtx) {
+  const b = await store.updateBusiness(db(), ctx.business.id, { settings: { bannerFileId: "" } });
+  return publicBusiness(b);
+}
+
 async function adminClients(ctx: BizCtx) {
   return db().query(
     `select c.tg_id, c.name, c.phone, c.last_seen, c.blocked_bot,
@@ -462,7 +461,7 @@ async function adminBroadcast(ctx: BizCtx, p: P) {
 
 async function superList() {
   const [businesses, stats] = await Promise.all([store.allBusinesses(db()), store.platformStats(db())]);
-  return { businesses: businesses.map((b: any) => ({ ...b, links: { client: clientLink(b.slug) } })), stats };
+  return { businesses: businesses.map((b: any) => ({ ...b, links: { client: clientLink(b.slug), admin: adminLink(b.slug) } })), stats };
 }
 
 async function superCreate(ctx: Ctx, p: P) {
@@ -500,7 +499,6 @@ const methods: Record<string, { need: Need; fn: (ctx: any, p: P) => Promise<unkn
   book: { need: "user", fn: book },
   myBookings: { need: "user", fn: myBookings },
   cancelMy: { need: "user", fn: cancelMy },
-  createOwnBusiness: { need: "user", fn: createOwnBusiness },
 
   "admin.overview": { need: "admin", fn: adminOverview },
   "admin.bookings": { need: "admin", fn: adminBookings },
@@ -516,6 +514,8 @@ const methods: Record<string, { need: Need; fn: (ctx: any, p: P) => Promise<unkn
   "admin.saveSettings": { need: "admin", fn: saveSettings },
   "admin.portfolio": { need: "admin", fn: (ctx: BizCtx) => store.listPortfolio(db(), ctx.business.id).then((l) => l.map(({ id, caption }) => ({ id, caption }))) },
   "admin.portfolioAdd": { need: "admin", fn: portfolioAdd },
+  "admin.bannerSet": { need: "admin", fn: bannerSet },
+  "admin.bannerRemove": { need: "admin", fn: bannerRemove },
   "admin.portfolioRemove": { need: "admin", fn: portfolioRemove },
   "admin.clients": { need: "admin", fn: adminClients },
   "admin.invite": { need: "admin", fn: adminInvite },

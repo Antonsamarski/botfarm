@@ -4,6 +4,7 @@ import {
   addDays,
   alertMsg,
   api,
+  bannerUrl,
   compressImage,
   confirmMsg,
   copy,
@@ -47,7 +48,7 @@ interface Overview {
   services: Service[];
   staff: Staff[];
   admins: { tg_id: number; role: string; first_name: string | null; username: string | null }[];
-  links: { client: string; botStart: string };
+  links: { client: string; admin: string; botStart: string };
 }
 
 type Tab = "bookings" | "services" | "schedule" | "more";
@@ -458,6 +459,7 @@ function SettingsEditor({ ov, reload, toast, onSaved }: Ctx & { onSaved: () => v
   return (
     <>
       <h2 className="page-title">Настройки</h2>
+      <BannerEditor businessId={b.id} fileId={s.bannerFileId} onChange={(fileId) => { setS({ ...s, bannerFileId: fileId }); reload(); }} />
       <Section title="Карточка бизнеса">
         <div className="form">
           <div className="row2 row-emoji">
@@ -846,6 +848,55 @@ function Admins({ ov, reload, toast }: Ctx) {
 
 // ---------------- Ссылка и QR ----------------
 
+// ---------------- Баннер ----------------
+
+function BannerEditor(p: { businessId: number; fileId?: string; onChange: (fileId: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  const url = bannerUrl(p.businessId, p.fileId);
+  const upload = async (files: FileList | null) => {
+    const f = files?.[0];
+    if (!f) return;
+    setBusy(true);
+    try {
+      const imageBase64 = await compressImage(f, 1600);
+      const res: any = await api("admin.bannerSet", { businessId: p.businessId, imageBase64 });
+      haptic("success");
+      p.onChange(res.settings.bannerFileId);
+    } catch (e: any) {
+      await alertMsg(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Section title="Баннер на главной" footer="Горизонтальное фото. Верх будет чётким, а к названию плавно размоется.">
+      {url && (
+        <div className="banner-preview">
+          <img src={url} alt="" />
+        </div>
+      )}
+      <div className="banner-actions">
+        <label className={`btn btn-secondary btn-small ${busy ? "disabled" : ""}`}>
+          {busy ? "Загружаю…" : url ? "Заменить фото" : "＋ Загрузить фото"}
+          <input type="file" accept="image/*" hidden disabled={busy} onChange={(e) => upload(e.target.files)} />
+        </label>
+        {url && (
+          <button
+            className="btn btn-danger btn-small"
+            onClick={async () => {
+              if (!(await confirmMsg("Убрать баннер?"))) return;
+              await api("admin.bannerRemove", { businessId: p.businessId });
+              p.onChange("");
+            }}
+          >
+            Убрать
+          </button>
+        )}
+      </div>
+    </Section>
+  );
+}
+
 function ShareLinks({ ov, toast }: Ctx) {
   const b = ov.business;
   const [qr, setQr] = useState<string>("");
@@ -873,6 +924,17 @@ function ShareLinks({ ov, toast }: Ctx) {
           </a>
         </div>
       )}
+      <h2 className="page-title">Ссылка на панель управления</h2>
+      <p className="muted pad">
+        Для вас и ваших администраторов — сохраните её. У остальных она откроет обычную запись, прав не даёт.
+        Нового администратора добавляйте через «Администраторы» → приглашение.
+      </p>
+      <div className="pad">
+        <div className="linkbox">{ov.links.admin}</div>
+        <button className="btn btn-secondary btn-block" onClick={async () => (await copy(ov.links.admin)) && toast("Скопировано")}>
+          Копировать
+        </button>
+      </div>
     </>
   );
 }

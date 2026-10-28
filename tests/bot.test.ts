@@ -57,11 +57,22 @@ describe("бот", () => {
     expect(replies()[0].payload.text).toContain("Борода");
   });
 
-  it("/start без истории — экран платформы с подключением бизнеса", async () => {
+  it("/start без истории — нет кнопки создания бизнеса", async () => {
     await start(400);
     const msg = replies()[0].payload;
-    expect(msg.text).toContain("Онлайн-запись для малого бизнеса");
-    expect(JSON.stringify(msg.reply_markup)).toContain("view=onboard");
+    expect(msg.text).toContain("откройте ссылку вашего мастера");
+    expect(JSON.stringify(msg.reply_markup ?? {})).not.toContain("onboard");
+  });
+
+  it("ссылка adm_ открывает панель только админу, остальным — запись", async () => {
+    const b = await createBusinessFromTemplate(db(), { templateId: "beauty", name: "Ногти", ownerTgId: 500 });
+    await start(500, `adm_${b.slug}`);
+    expect(JSON.stringify(replies()[0].payload.reply_markup)).toContain("view=admin");
+    calls.length = 0;
+    await start(600, `adm_${b.slug}`);
+    const msg = replies()[0].payload;
+    expect(JSON.stringify(msg.reply_markup)).not.toContain("view=admin");
+    expect(msg.text).toContain("Ногти");
   });
 
   it("приглашение делает владельцем", async () => {

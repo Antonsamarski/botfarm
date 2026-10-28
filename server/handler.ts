@@ -64,10 +64,13 @@ async function rpc(req: Request): Promise<Response> {
 
 /** Фото портфолио: файл хранится в Telegram, отдаём через CDN Vercel с долгим кэшем. */
 async function photo(url: URL): Promise<Response> {
-  const id = Number(url.searchParams.get("id"));
+  const bannerOf = url.searchParams.get("banner");
+  const id = Number(bannerOf ?? url.searchParams.get("id"));
   if (!Number.isInteger(id)) return new Response("bad id", { status: 400 });
-  const [row] = await db().query(`select file_id from portfolio where id = $1`, [id]);
-  if (!row) return new Response("not found", { status: 404 });
+  const [row] = bannerOf
+    ? await db().query(`select settings->>'bannerFileId' as file_id from businesses where id = $1`, [id])
+    : await db().query(`select file_id from portfolio where id = $1`, [id]);
+  if (!row?.file_id) return new Response("not found", { status: 404 });
   const file = await rawApi().getFile(row.file_id);
   const res = await fetch(`https://api.telegram.org/file/bot${config.botToken}/${file.file_path}`);
   if (!res.ok) return new Response("upstream error", { status: 502 });
@@ -107,7 +110,7 @@ async function status(): Promise<Response> {
   } catch (e: any) {
     return json({ ok: false, db: false, error: String(e?.message ?? e).replace(/postgres(ql)?:\/\/[^\s]+/g, "<url>") }, 500);
   }
-  const info = config.botToken ? await rawApi().getWebhookInfo() : null;
+  const info = config.botToken ? await rawApi().getWebhookInfo().catch(() => null) : null;
   return json({
     ok: true,
     db: true,

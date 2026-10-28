@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   alertMsg,
   api,
+  bannerUrl,
   confirmMsg,
   dateOnly,
   duration,
@@ -29,10 +30,18 @@ export function BusinessHome(p: {
   const b = p.boot.business!;
   const s = b.settings;
   const [photo, setPhoto] = useState<number | null>(null);
+  const banner = bannerUrl(b.id, s.bannerFileId);
   return (
-    <div className="page">
-      <header className="hero" style={{ ["--accent" as any]: s.accent }}>
-        <div className="hero-emoji">{s.emoji}</div>
+    <div className="page page-cover">
+      <header className={`hero hero-cover ${banner ? "has-banner" : ""}`} style={{ ["--accent" as any]: s.accent }}>
+        <div className="cover" aria-hidden>
+          {banner && (
+            <>
+              <img className="cover-img" src={banner} alt="" />
+              <img className="cover-blur" src={banner} alt="" />
+            </>
+          )}
+        </div>
         <h1>{b.name}</h1>
         {s.description && <p className="hero-text">{s.description}</p>}
         <div className="hero-actions">

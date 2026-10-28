@@ -108,12 +108,26 @@ describe("клиентский путь", () => {
     expect(sent.find((m) => m.chatId === 300)?.html).toContain("Запись отменена");
   });
 
-  it("самостоятельное подключение бизнеса уведомляет суперадминов", async () => {
-    const res: any = await call("createOwnBusiness", { templateId: "auto", name: "Детейлинг Самара" }, as(500));
-    expect(res.slug).toBe("deteyling-samara");
-    expect(sent.filter((m) => m.html.includes("Новый бизнес")).map((m) => m.chatId).sort()).toEqual([1, 2]);
-    const ov: any = await call("admin.overview", { businessId: (await call("boot", { slug: res.slug }, as(500)) as any).business.id }, as(500));
-    expect(ov.role).toBe("owner");
+  it("создавать бизнесы могут только суперадмины — ни клиент, ни владелец не могут", async () => {
+    await expect(call("createOwnBusiness", { templateId: "auto", name: "Детейлинг" }, as(500))).rejects.toThrow("Неизвестный метод");
+    await expect(call("super.create", { templateId: "auto", name: "Детейлинг" }, as(500))).rejects.toThrow("Нет доступа");
+    const { db } = await import("../server/db");
+    await claimInvite(db(), ownerInvite.split("inv_")[1], 200);
+    await expect(call("super.create", { templateId: "auto", name: "Ещё один" }, as(200))).rejects.toThrow("Нет доступа");
+  });
+
+  it("баннер: админ загружает, клиент видит file_id, админ убирает", async () => {
+    await call("admin.bannerSet", { businessId: biz.id, imageBase64: Buffer.alloc(5000, 1).toString("base64") });
+    const boot: any = await call("boot", {}, as(300, "nogti-anny"));
+    expect(boot.business.settings.bannerFileId).toBe("FILE123");
+    // обычное сохранение настроек не затирает баннер
+    await call("admin.saveSettings", { businessId: biz.id, settings: { description: "Новое", bannerFileId: "HACK" } });
+    const again: any = await call("boot", {}, as(300, "nogti-anny"));
+    expect(again.business.settings.bannerFileId).toBe("FILE123");
+    await call("admin.bannerRemove", { businessId: biz.id });
+    const after: any = await call("boot", {}, as(300, "nogti-anny"));
+    expect(after.business.settings.bannerFileId).toBe("");
+    await expect(call("admin.bannerSet", { businessId: biz.id, imageBase64: "x" }, as(300))).rejects.toThrow("Нет доступа");
   });
 
   it("заблокированный бизнес не показывается клиентам", async () => {

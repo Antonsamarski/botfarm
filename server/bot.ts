@@ -1,6 +1,6 @@
 import { Bot, type Context, InlineKeyboard } from "grammy";
 import type { UserFromGetMe } from "grammy/types";
-import { clientLink, config, webAppUrl } from "./config.js";
+import { adminLink, clientLink, config, webAppUrl } from "./config.js";
 import { db } from "./db.js";
 import { esc } from "./format.js";
 import * as store from "./store.js";
@@ -50,17 +50,14 @@ async function showPlatform(ctx: Context) {
   const kb = new InlineKeyboard();
   for (const b of adminOf.slice(0, 5)) kb.webApp(`⚙️ ${b.name}`, webAppUrl({ b: b.slug, view: "admin" })).row();
   if (isSuper(uid)) kb.webApp("👑 Панель платформы", webAppUrl({ view: "super" })).row();
-  kb.webApp("🚀 Подключить свой бизнес", webAppUrl({ view: "onboard" }));
-  const text = adminOf.length
-    ? "Ваши бизнесы — выберите, чтобы открыть панель управления:"
+  const text = adminOf.length || isSuper(uid)
+    ? "Выберите, что открыть:"
     : [
-        "👋 <b>Онлайн-запись для малого бизнеса — бесплатно</b>",
+        "👋 <b>Онлайн-запись</b>",
         "",
-        "Если вы клиент — откройте ссылку вашего мастера, и здесь появится запись к нему.",
-        "",
-        "Если вы мастер или предприниматель — подключите свой бизнес за минуту: услуги, график, напоминания клиентам, рассылки.",
+        "Чтобы записаться, откройте ссылку вашего мастера — и здесь появится запись к нему.",
       ].join("\n");
-  await ctx.reply(text, { parse_mode: "HTML", reply_markup: kb });
+  await ctx.reply(text, { parse_mode: "HTML", reply_markup: adminOf.length || isSuper(uid) ? kb : undefined });
 }
 
 function register(b: Bot) {
@@ -82,8 +79,13 @@ function register(b: Bot) {
           [
             `🎉 <b>Готово!</b> Вы ${role === "owner" ? "владелец" : "администратор"} «${esc(business.name)}».`,
             "",
-            "В панели можно поменять услуги, цены, график и тексты. Ссылка для клиентов — её можно поставить в шапку канала, Instagram и в ответы клиентам:",
+            "В панели можно поменять услуги, цены, график и тексты.",
+            "",
+            "Ссылка для клиентов — поставьте её в шапку канала, Instagram и в ответы клиентам:",
             esc(clientLink(business.slug)),
+            "",
+            "Ваша ссылка на панель управления (сохраните; у других она откроет обычную запись):",
+            esc(adminLink(business.slug)),
           ].join("\n"),
           { parse_mode: "HTML", reply_markup: kb, link_preview_options: { is_disabled: true } },
         );
@@ -97,6 +99,23 @@ function register(b: Bot) {
         await ctx.reply(e instanceof UserError ? `⚠️ ${e.message}` : "⚠️ Не удалось принять приглашение");
       }
       return;
+    }
+
+    // постоянная ссылка на панель: открывает управление только тем, у кого есть роль
+    if (payload.startsWith("adm_")) {
+      const business = await store.getBusiness(db(), payload.slice(4));
+      if (!business) return showPlatform(ctx);
+      const role = await store.roleFor(db(), uid, business.id, config.superadmins);
+      await store.setLastBusiness(db(), uid, business.id);
+      if (!role) {
+        await store.touchClient(db(), business.id, ctx.from!);
+        return showBusiness(ctx, business);
+      }
+      const kb = new InlineKeyboard()
+        .webApp("⚙️ Открыть панель управления", webAppUrl({ b: business.slug, view: "admin" }))
+        .row()
+        .webApp("👁 Как видят клиенты", webAppUrl({ b: business.slug }));
+      return ctx.reply(`Панель управления «${esc(business.name)}»`, { parse_mode: "HTML", reply_markup: kb });
     }
 
     if (payload) {

@@ -4,11 +4,10 @@ import type { Boot } from "./types";
 import { BackLink, Cell, Empty, ErrorBox, Field, MainButton, Section, Select, Spinner, Toast, useLoad, useToast } from "./ui";
 
 /** Экран без выбранного бизнеса. */
-export function Landing(p: { boot: Boot; onOnboard: () => void; onAdmin: (id: number) => void; onSuper: () => void }) {
+export function Landing(p: { boot: Boot; onAdmin: (id: number) => void; onSuper: () => void }) {
   return (
     <div className="page">
-      <header className="hero">
-        <div className="hero-emoji">🗓</div>
+      <header className="hero hero-plain">
         <h1>Онлайн-запись в Telegram</h1>
         <p className="hero-text">
           {p.boot.blocked
@@ -27,62 +26,6 @@ export function Landing(p: { boot: Boot; onOnboard: () => void; onAdmin: (id: nu
             <Cell key={b.slug} before={b.emoji} title={b.name} subtitle={b.role === "owner" ? "владелец" : "администратор"} onClick={() => p.onAdmin(b.id)} chevron />
           ))}
         </Section>
-      )}
-      <Section title="Для мастеров и предпринимателей">
-        <div className="pitch">
-          <div>✅ Запись 24/7 без переписок</div>
-          <div>🔔 Напоминания клиентам — меньше неявок</div>
-          <div>🗂 Услуги, цены, график, портфолио</div>
-          <div>📣 Рассылки по своей базе клиентов</div>
-          <div>💸 Бесплатно</div>
-        </div>
-      </Section>
-      <MainButton text="🚀 Подключить свой бизнес" onClick={p.onOnboard} />
-    </div>
-  );
-}
-
-export function Onboard(p: { boot: Boot; onBack: () => void; onCreated: (slug: string) => void }) {
-  const [tpl, setTpl] = useState<string | null>(null);
-  const [name, setName] = useState("");
-  const t = p.boot.templates.find((x) => x.id === tpl);
-  return (
-    <div className="page">
-      <BackLink onBack={tpl ? () => setTpl(null) : p.onBack} />
-      {!tpl ? (
-        <>
-          <h2 className="page-title">Чем вы занимаетесь?</h2>
-          <p className="muted pad">Выберите шаблон — услуги, цены и график подставятся сами, всё можно поменять.</p>
-          <Section>
-            {p.boot.templates.map((x) => (
-              <Cell key={x.id} before={x.emoji} title={x.title} subtitle={x.pitch} onClick={() => setTpl(x.id)} chevron />
-            ))}
-          </Section>
-        </>
-      ) : (
-        <>
-          <h2 className="page-title">
-            {t?.emoji} {t?.title}
-          </h2>
-          <Section footer="Так бизнес увидят клиенты. Из названия сделаем ссылку.">
-            <div className="form">
-              <Field label="Название" value={name} onChange={setName} placeholder="Например: Ногти Анны" required />
-            </div>
-          </Section>
-          <MainButton
-            text="Создать"
-            disabled={name.trim().length < 2}
-            onClick={async () => {
-              try {
-                const r: any = await api("createOwnBusiness", { templateId: tpl, name });
-                haptic("success");
-                p.onCreated(r.slug);
-              } catch (e: any) {
-                await alertMsg(e.message);
-              }
-            }}
-          />
-        </>
       )}
     </div>
   );
@@ -126,6 +69,11 @@ export function SuperPanel(p: { boot: Boot; onBack: (() => void) | null; onAdmin
         </Section>
         <Section>
           <Cell title="Ссылка для клиентов" subtitle={created.links.client} onClick={async () => (await copy(created.links.client)) && showToast("Скопировано")} />
+          <Cell
+            title="Ссылка на панель мастера"
+            subtitle={`${created.links.admin}\nработает только после того, как мастер примет приглашение`}
+            onClick={async () => (await copy(created.links.admin)) && showToast("Скопировано")}
+          />
           <Cell title="Приглашение владельца" subtitle={created.ownerInvite} onClick={async () => (await copy(created.ownerInvite)) && showToast("Скопировано")} />
           <Cell title="⚙️ Настроить перед отправкой" onClick={() => p.onAdmin(created.business.id)} chevron />
         </Section>
@@ -214,6 +162,9 @@ function BizRow({ b, templates, onAdmin, reload, toast }: any) {
       {open && (
         <div className="row-actions">
           <button className="btn btn-small btn-primary" onClick={onAdmin}>⚙️ Управлять</button>
+          <button className="btn btn-small btn-secondary" onClick={async () => (await copy(b.links.admin)) && toast("Ссылка на панель скопирована")}>
+            ⚙️ Панель
+          </button>
           <button className="btn btn-small btn-secondary" onClick={async () => (await copy(b.links.client)) && toast("Ссылка скопирована")}>
             🔗 Ссылка
           </button>

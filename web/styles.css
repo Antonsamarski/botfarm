@@ -56,6 +56,29 @@ h1, h2 { margin: 0; letter-spacing: -0.01em; }
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent) inset;
 }
 .hero h1 { font-size: 24px; }
+.hero-plain { padding-top: 28px; }
+
+/* Обложка-баннер: сверху фото чёткое, ближе к тексту размывается и растворяется в фоне */
+.page-cover { padding-top: 0; }
+.hero-cover { position: relative; padding: 0 16px 16px; }
+.hero-cover .cover {
+  position: relative; height: 150px; margin: 0 -16px -40px; overflow: hidden;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 55%, var(--bg)), var(--bg) 85%);
+}
+.hero-cover.has-banner .cover { height: 300px; margin-bottom: -96px; background: var(--bg); }
+.cover-img, .cover-blur { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.cover-blur {
+  filter: blur(16px) saturate(1.1);
+  transform: scale(1.12);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 30%, #000 72%);
+  mask-image: linear-gradient(to bottom, transparent 30%, #000 72%);
+}
+.hero-cover .cover::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(to bottom, transparent 40%, color-mix(in srgb, var(--bg) 70%, transparent) 72%, var(--bg) 100%);
+}
+.hero-cover h1, .hero-cover .hero-text, .hero-cover .hero-actions { position: relative; z-index: 1; }
+.hero-cover.has-banner h1 { text-shadow: 0 1px 12px color-mix(in srgb, var(--bg) 80%, transparent); }
 .hero-text { color: var(--sub); margin: 8px auto 0; max-width: 46ch; white-space: pre-line; }
 .hero-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 14px; }
 .chip {
@@ -82,7 +105,7 @@ h1, h2 { margin: 0; letter-spacing: -0.01em; }
 .cell-before { font-size: 20px; width: 28px; text-align: center; flex: none; }
 .cell-main { flex: 1; min-width: 0; }
 .cell-title { font-weight: 500; overflow-wrap: anywhere; }
-.cell-sub { color: var(--sub); font-size: 13px; margin-top: 2px; overflow-wrap: anywhere; }
+.cell-sub { color: var(--sub); font-size: 13px; margin-top: 2px; overflow-wrap: anywhere; white-space: pre-line; }
 .cell-after { flex: none; color: var(--sub); text-align: right; }
 .cell-chevron { color: var(--hint); font-size: 22px; line-height: 1; flex: none; }
 .cell-danger .cell-title { color: var(--danger); }
@@ -220,3 +243,7 @@ h1, h2 { margin: 0; letter-spacing: -0.01em; }
   appearance: none; -webkit-appearance: none; text-align: center;
 }
 .field .time-select { border-radius: 10px; padding: 10px 12px; text-align: left; }
+
+.banner-preview { margin: 12px 14px 0; border-radius: 12px; overflow: hidden; aspect-ratio: 16 / 9; background: var(--bg); }
+.banner-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.banner-actions { display: flex; gap: 8px; padding: 12px 14px; flex-wrap: wrap; }
