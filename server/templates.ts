@@ -27,6 +27,8 @@ export interface BusinessSettings {
   fields: Field[];
   /** Баннер главной страницы: file_id фото в Telegram ("" — нет баннера) */
   bannerFileId: string;
+  /** Преобладающий цвет баннера (#rrggbb) — в него переходит размытие и фон главной */
+  bannerColor: string;
 }
 
 export interface Template {
@@ -61,6 +63,7 @@ const baseSettings = (over: Partial<BusinessSettings>): BusinessSettings => ({
   remind2h: true,
   fields: [],
   bannerFileId: "",
+  bannerColor: "",
   ...over,
 });
 

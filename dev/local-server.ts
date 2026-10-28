@@ -34,6 +34,7 @@ const demo: [string, string][] = [
 ];
 for (const [i, [tpl, name]] of demo.entries()) {
   const b = await store.createBusinessFromTemplate(db, { templateId: tpl, name, ownerTgId: i === 0 ? 2 : undefined, timezone: "Europe/Samara" });
+  if (i === 3) await store.updateBusiness(db, b.id, { settings: { bannerFileId: "demo-banner-2" } });
   if (i === 0) {
     await store.updateBusiness(db, b.id, {
       settings: {
@@ -73,7 +74,7 @@ createServer(async (req, res) => {
     }
     // фото хранятся в Telegram, которого локально нет — отдаём картинку-заглушку
     if (url.pathname === "/api/photo") {
-      const hue = (Number(url.searchParams.get("banner") ?? url.searchParams.get("id")) * 47) % 360;
+      const hue = url.searchParams.has("banner") ? (Number(url.searchParams.get("banner")) * 47 + 290) % 360 : (Number(url.searchParams.get("id")) * 47) % 360;
       res.writeHead(200, { "content-type": "image/svg+xml" });
       res.end(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="hsl(${hue},70%,62%)"/><stop offset="1" stop-color="hsl(${hue + 60},60%,35%)"/></linearGradient></defs><rect width="1600" height="900" fill="url(#g)"/><circle cx="1200" cy="260" r="160" fill="hsl(${hue + 30},90%,85%)" opacity=".85"/><path d="M0 700 L400 420 L700 620 L1050 360 L1600 680 L1600 900 L0 900Z" fill="hsl(${hue + 90},40%,25%)" opacity=".8"/><circle cx="380" cy="230" r="70" fill="#fff" opacity=".5"/></svg>`);
       return;

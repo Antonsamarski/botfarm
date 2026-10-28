@@ -602,6 +602,7 @@ var baseSettings = (over) => ({
   remind2h: true,
   fields: [],
   bannerFileId: "",
+  bannerColor: "",
   ...over
 });
 var TEMPLATES = [
@@ -1658,12 +1659,13 @@ async function bannerSet(ctx, p) {
   const buf = Buffer.from(b64, "base64");
   if (buf.length < 1e3) throw new UserError("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u0442\u044C \u0444\u043E\u0442\u043E");
   if (buf.length > 35e5) throw new UserError("\u0424\u043E\u0442\u043E \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u0431\u043E\u043B\u044C\u0448\u043E\u0435");
+  const color = /^#[0-9a-f]{6}$/i.test(String(p.color ?? "")) ? String(p.color).toLowerCase() : "";
   const { file_id } = await tg().sendPhoto(ctx.init.user.id, new Uint8Array(buf), `\u{1F5BC} \u041D\u043E\u0432\u044B\u0439 \u0431\u0430\u043D\u043D\u0435\u0440 \xAB${ctx.business.name}\xBB`);
-  const b = await updateBusiness(db(), ctx.business.id, { settings: { bannerFileId: file_id } });
+  const b = await updateBusiness(db(), ctx.business.id, { settings: { bannerFileId: file_id, bannerColor: color } });
   return publicBusiness(b);
 }
 async function bannerRemove(ctx) {
-  const b = await updateBusiness(db(), ctx.business.id, { settings: { bannerFileId: "" } });
+  const b = await updateBusiness(db(), ctx.business.id, { settings: { bannerFileId: "", bannerColor: "" } });
   return publicBusiness(b);
 }
 async function adminClients(ctx) {

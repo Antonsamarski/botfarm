@@ -4,6 +4,9 @@ import {
   api,
   bannerUrl,
   confirmMsg,
+  dominantColor,
+  isLight,
+  WA,
   dateOnly,
   duration,
   ensureWriteAccess,
@@ -17,7 +20,7 @@ import {
   rub,
 } from "./lib";
 import type { Boot, Booking, Service, Slot } from "./types";
-import { BackLink, Cell, Empty, ErrorBox, Field, MainButton, Section, Spinner, useLoad } from "./ui";
+import { BackLink, Cell, Empty, ErrorBox, Field, Icon, MainButton, Section, Spinner, useLoad } from "./ui";
 
 type Biz = NonNullable<Boot["business"]>;
 
@@ -31,13 +34,60 @@ export function BusinessHome(p: {
   const b = p.boot.business!;
   const s = b.settings;
   const banner = bannerUrl(b.id, s.bannerFileId);
+  // цвет фона главной = преобладающий цвет баннера (считается при загрузке; для старых баннеров — здесь)
+  const [picked, setPicked] = useState<string>("");
+  const tone = banner ? s.bannerColor || picked : "";
+  const light = tone ? isLight(tone) : false;
+
+  useEffect(() => {
+    if (!tone) return;
+    try {
+      WA?.setBackgroundColor?.(tone);
+      WA?.setHeaderColor?.(tone);
+    } catch {}
+    const prev = document.body.style.background;
+    document.body.style.background = tone;
+    return () => {
+      document.body.style.background = prev;
+      try {
+        WA?.setBackgroundColor?.("secondary_bg_color");
+        WA?.setHeaderColor?.("secondary_bg_color");
+      } catch {}
+    };
+  }, [tone]);
+
+  const themed = tone
+    ? ({
+        "--bg": tone,
+        "--text": light ? "#16181c" : "#ffffff",
+        "--sub": light ? "rgba(0,0,0,.62)" : "rgba(255,255,255,.78)",
+        "--tile": light ? "rgba(255,255,255,.55)" : "rgba(255,255,255,.14)",
+        "--tile-press": light ? "rgba(255,255,255,.75)" : "rgba(255,255,255,.24)",
+        "--cta-bg": light ? "#16181c" : "#ffffff",
+        "--cta-text": light ? "#ffffff" : tone,
+        background: tone,
+        color: light ? "#16181c" : "#ffffff",
+      } as any)
+    : ({ "--cta-bg": s.accent, "--cta-text": "#fff" } as any);
+
   return (
-    <div className="page page-cover">
-      <header className={`hero hero-cover ${banner ? "has-banner" : ""}`} style={{ ["--accent" as any]: s.accent }}>
+    <div className={`page page-cover ${tone ? "page-toned" : ""}`} style={{ ["--accent" as any]: s.accent, ...themed }}>
+      <header className={`hero hero-cover ${banner ? "has-banner" : ""}`}>
         <div className="cover" aria-hidden>
           {banner && (
             <>
-              <img className="cover-img" src={banner} alt="" />
+              <img
+                className="cover-img"
+                src={banner}
+                alt=""
+                onLoad={(e) => {
+                  if (!s.bannerColor) {
+                    try {
+                      setPicked(dominantColor(e.currentTarget));
+                    } catch {}
+                  }
+                }}
+              />
               <img className="cover-blur" src={banner} alt="" />
             </>
           )}
@@ -45,15 +95,19 @@ export function BusinessHome(p: {
         <h1>{b.name}</h1>
         {s.description && <p className="hero-text">{s.description}</p>}
         <div className="hero-actions">
-          {s.address && <span className="chip">📍 {s.address}</span>}
+          {s.address && (
+            <span className="chip">
+              <Icon name="pin" size={15} /> {s.address}
+            </span>
+          )}
           {s.contactPhone && (
             <a className="chip" href={`tel:${s.contactPhone.replace(/[^\d+]/g, "")}`}>
-              📞 {s.contactPhone}
+              <Icon name="phone" size={15} /> {s.contactPhone}
             </a>
           )}
           {s.links.map((l) => (
             <button key={l.url} className="chip" onClick={() => openLink(l.url)}>
-              🔗 {l.title}
+              <Icon name="link" size={15} /> {l.title}
             </button>
           ))}
         </div>
@@ -61,24 +115,26 @@ export function BusinessHome(p: {
 
       <div className="home-actions">
         <button
-          className="btn btn-primary btn-block btn-big"
-          style={{ background: s.accent }}
+          className="btn btn-block btn-big btn-cta"
           disabled={!b.services.length}
           onClick={() => {
             haptic();
             p.onBook();
           }}
         >
+          <Icon name="calendar" size={20} />
           {b.services.length ? "Записаться" : "Скоро здесь появится запись"}
         </button>
         <div className="home-row">
           {b.portfolio.length > 0 && (
             <button className="home-tile" onClick={p.onPortfolio}>
+              <Icon name="photo" size={22} />
               <span className="home-tile-title">Портфолио</span>
               <span className="home-tile-sub">{b.portfolio.length} фото</span>
             </button>
           )}
           <button className={`home-tile ${p.boot.next ? "home-tile-on" : ""}`} onClick={p.onMy}>
+            <Icon name="calendar" size={22} />
             <span className="home-tile-title">Мои записи</span>
             <span className="home-tile-sub">
               {p.boot.next ? `${fmtDay(p.boot.next.starts_at, b.timezone)}, ${fmtTime(p.boot.next.starts_at, b.timezone)}` : "Отменить или посмотреть"}
@@ -89,7 +145,7 @@ export function BusinessHome(p: {
 
       {p.onAdmin && (
         <button className="admin-banner" onClick={p.onAdmin}>
-          ⚙️ Вы управляете этим бизнесом — открыть панель
+          Вы управляете этим бизнесом — открыть панель
         </button>
       )}
     </div>

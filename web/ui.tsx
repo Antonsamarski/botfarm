@@ -294,3 +294,23 @@ export function TimeSelect(p: { value: string; onChange: (v: string) => void; al
     </select>
   );
 }
+
+/** Однотонные иконки вместо эмодзи (цвет — currentColor). */
+const ICONS: Record<string, string> = {
+  pin: "M12 21s-7-6.1-7-11.5A7 7 0 0 1 19 9.5C19 14.9 12 21 12 21Zm0-9a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z",
+  phone: "M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1L6.6 10.8Z",
+  link: "M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1m1.9 4.4a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1",
+  photo: "M4 5h16v14H4zM4 15l4.5-4.5 4 4 2.5-2.5L20 17M15.5 9.5h.01",
+  calendar: "M5 5h14v15H5zM5 10h14M9 3v4M15 3v4",
+  arrow: "M9 6l6 6-6 6",
+};
+export function Icon({ name, size = 18 }: { name: keyof typeof ICONS | string; size?: number }) {
+  const filled = name === "pin" || name === "phone";
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden className="icon"
+      fill={filled ? "currentColor" : "none"} stroke={filled ? "none" : "currentColor"}
+      strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      <path d={ICONS[name]} />
+    </svg>
+  );
+}

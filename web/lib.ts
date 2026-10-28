@@ -171,6 +171,59 @@ export async function compressImage(file: File, max = 1600): Promise<string> {
   return canvas.toDataURL("image/jpeg", 0.82);
 }
 
+/**
+ * Преобладающий цвет картинки: уменьшаем до 48×48, раскладываем пиксели по «корзинам» цвета
+ * (насыщенные пиксели весят больше, почти белые/чёрные — меньше) и усредняем самую тяжёлую корзину.
+ */
+export function dominantColor(src: CanvasImageSource): string {
+  const n = 48;
+  const c = document.createElement("canvas");
+  c.width = n;
+  c.height = n;
+  const ctx = c.getContext("2d", { willReadFrequently: true })!;
+  ctx.drawImage(src, 0, 0, n, n);
+  const d = ctx.getImageData(0, 0, n, n).data;
+  const buckets = new Map<number, { w: number; r: number; g: number; b: number }>();
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] < 128) continue;
+    const r = d[i], g = d[i + 1], b = d[i + 2];
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    const sat = max ? (max - min) / max : 0;
+    const light = (max + min) / 510;
+    const w = 0.3 + sat * 2 + (light > 0.08 && light < 0.92 ? 0.5 : 0);
+    const key = ((r >> 5) << 6) | ((g >> 5) << 3) | (b >> 5);
+    const bk = buckets.get(key) ?? { w: 0, r: 0, g: 0, b: 0 };
+    bk.w += w;
+    bk.r += r * w;
+    bk.g += g * w;
+    bk.b += b * w;
+    buckets.set(key, bk);
+  }
+  let best = { w: 0, r: 0, g: 0, b: 0 };
+  for (const bk of buckets.values()) if (bk.w > best.w) best = bk;
+  if (!best.w) return "";
+  const hex = (v: number) => Math.round(v / best.w).toString(16).padStart(2, "0");
+  return `#${hex(best.r)}${hex(best.g)}${hex(best.b)}`;
+}
+
+/** Светлый ли цвет (тогда поверх него нужен тёмный текст). */
+export function isLight(hex: string): boolean {
+  const v = parseInt(hex.slice(1), 16);
+  const ch = [(v >> 16) & 255, (v >> 8) & 255, v & 255].map((x) => {
+    const c = x / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2] > 0.45;
+}
+
+export async function dominantColorOfFile(file: File): Promise<string> {
+  try {
+    return dominantColor(await createImageBitmap(file));
+  } catch {
+    return "";
+  }
+}
+
 export const RU_TIMEZONES: [string, string][] = [
   ["Europe/Kaliningrad", "Калининград (МСК−1)"],
   ["Europe/Moscow", "Москва (МСК)"],

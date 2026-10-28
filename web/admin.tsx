@@ -6,6 +6,7 @@ import {
   api,
   bannerUrl,
   compressImage,
+  dominantColorOfFile,
   confirmMsg,
   copy,
   dateOnly,
@@ -858,8 +859,8 @@ function BannerEditor(p: { businessId: number; fileId?: string; onChange: (fileI
     if (!f) return;
     setBusy(true);
     try {
-      const imageBase64 = await compressImage(f, 1600);
-      const res: any = await api("admin.bannerSet", { businessId: p.businessId, imageBase64 });
+      const [imageBase64, color] = await Promise.all([compressImage(f, 1600), dominantColorOfFile(f)]);
+      const res: any = await api("admin.bannerSet", { businessId: p.businessId, imageBase64, color });
       haptic("success");
       p.onChange(res.settings.bannerFileId);
     } catch (e: any) {
@@ -869,7 +870,7 @@ function BannerEditor(p: { businessId: number; fileId?: string; onChange: (fileI
     }
   };
   return (
-    <Section title="Баннер на главной" footer="Горизонтальное фото. Верх будет чётким, а к названию плавно размоется.">
+    <Section title="Баннер на главной" footer="Горизонтальное фото. Верх будет чётким, ниже плавно размоется и перейдёт в основной цвет фото — в него же окрасится фон страницы.">
       {url && (
         <div className="banner-preview">
           <img src={url} alt="" />

@@ -24,6 +24,7 @@ export interface Settings {
   remind2h: boolean;
   fields: Field[];
   bannerFileId?: string;
+  bannerColor?: string;
 }
 
 export interface Service {
