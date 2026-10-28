@@ -1,7 +1,7 @@
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { AdminPanel } from "./admin";
-import { BookFlow, BusinessHome, MyBookings } from "./client";
+import { BookFlow, BusinessHome, MyBookings, PortfolioScreen } from "./client";
 import { api, ensureDevAuth, inTelegram, urlParams, WA } from "./lib";
 import { Landing, SuperPanel } from "./platform";
 import type { Boot } from "./types";
@@ -12,6 +12,7 @@ type Route =
   | { name: "home" }
   | { name: "book"; serviceId?: number }
   | { name: "my" }
+  | { name: "portfolio" }
   | { name: "admin"; businessId: number }
   | { name: "super" };
 
@@ -82,6 +83,9 @@ function App() {
     case "book":
       if (!biz) return null;
       return <BookFlow key={JSON.stringify(route)} boot={boot} serviceId={route.serviceId} onBack={pop ?? home} onMy={() => setStack([{ name: "home" }, { name: "my" }])} />;
+    case "portfolio":
+      if (!biz) return null;
+      return <PortfolioScreen boot={boot} onBack={pop ?? home} onBook={() => push({ name: "book" })} />;
     case "my":
       if (!biz) return null;
       return <MyBookings boot={boot} onBack={pop ?? home} onBook={() => push({ name: "book" })} />;
@@ -101,6 +105,7 @@ function App() {
           boot={boot}
           onBook={(serviceId) => push({ name: "book", serviceId })}
           onMy={() => push({ name: "my" })}
+          onPortfolio={() => push({ name: "portfolio" })}
           onAdmin={boot.role ? () => push({ name: "admin", businessId: biz.id }) : undefined}
         />
       );

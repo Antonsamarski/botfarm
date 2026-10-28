@@ -62,6 +62,7 @@ export interface Boot {
   business: (PublicBusiness & { services: Service[]; staff: Staff[]; portfolio: { id: number; caption: string }[] }) | null;
   role: "super" | "owner" | "admin" | null;
   client: { name: string; phone: string } | null;
+  next?: { starts_at: string; service_title: string } | null;
   blocked?: boolean;
   adminOf: { id: number; slug: string; name: string; role: string; emoji: string }[];
   templates: { id: string; title: string; emoji: string; pitch: string }[];

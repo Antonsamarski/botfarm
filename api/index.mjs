@@ -1351,11 +1351,17 @@ async function boot(ctx, p) {
     if (!role) await touchClient(db(), business.id, u);
   }
   const [client] = business ? await db().query(`select name, phone from clients where business_id = $1 and tg_id = $2`, [business.id, u.id]) : [];
+  const [next] = business ? await db().query(
+    `select starts_at, service_title from bookings where business_id = $1 and client_tg_id = $2
+         and status = 'confirmed' and starts_at > now() order by starts_at limit 1`,
+    [business.id, u.id]
+  ) : [];
   return {
     me: { id: u.id, name: u.first_name, isSuper: isSuper2 },
     business: business ? { ...publicBusiness(business), ...await catalog(business) } : null,
     role,
     client: client ?? null,
+    next: next ?? null,
     adminOf: adminOf.map((b) => ({ id: b.id, slug: b.slug, name: b.name, role: b.role, emoji: b.settings.emoji })),
     templates: tplList()
   };

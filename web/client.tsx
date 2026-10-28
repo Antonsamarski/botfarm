@@ -25,11 +25,11 @@ export function BusinessHome(p: {
   boot: Boot;
   onBook: (serviceId?: number) => void;
   onMy: () => void;
+  onPortfolio: () => void;
   onAdmin?: () => void;
 }) {
   const b = p.boot.business!;
   const s = b.settings;
-  const [photo, setPhoto] = useState<number | null>(null);
   const banner = bannerUrl(b.id, s.bannerFileId);
   return (
     <div className="page page-cover">
@@ -59,51 +59,90 @@ export function BusinessHome(p: {
         </div>
       </header>
 
+      <div className="home-actions">
+        <button
+          className="btn btn-primary btn-block btn-big"
+          style={{ background: s.accent }}
+          disabled={!b.services.length}
+          onClick={() => {
+            haptic();
+            p.onBook();
+          }}
+        >
+          {b.services.length ? "Записаться" : "Скоро здесь появится запись"}
+        </button>
+        <div className="home-row">
+          {b.portfolio.length > 0 && (
+            <button className="home-tile" onClick={p.onPortfolio}>
+              <span className="home-tile-title">Портфолио</span>
+              <span className="home-tile-sub">{b.portfolio.length} фото</span>
+            </button>
+          )}
+          <button className={`home-tile ${p.boot.next ? "home-tile-on" : ""}`} onClick={p.onMy}>
+            <span className="home-tile-title">Мои записи</span>
+            <span className="home-tile-sub">
+              {p.boot.next ? `${fmtDay(p.boot.next.starts_at, b.timezone)}, ${fmtTime(p.boot.next.starts_at, b.timezone)}` : "Отменить или посмотреть"}
+            </span>
+          </button>
+        </div>
+      </div>
+
       {p.onAdmin && (
         <button className="admin-banner" onClick={p.onAdmin}>
           ⚙️ Вы управляете этим бизнесом — открыть панель
         </button>
       )}
+    </div>
+  );
+}
 
-      {b.portfolio.length > 0 && (
-        <Section title="Портфолио">
-          <div className="gallery">
-            {b.portfolio.map((ph) => (
-              <button key={ph.id} className="gallery-item" onClick={() => setPhoto(ph.id)}>
-                <img src={photoUrl(ph.id)} alt={ph.caption} loading="lazy" />
-              </button>
-            ))}
-          </div>
-        </Section>
-      )}
-
-      <Section title={s.labels.service === "Услуга" ? "Услуги и цены" : `${s.labels.service} — цены`}>
-        {b.services.length === 0 && <Empty title="Скоро здесь появятся услуги" />}
-        {b.services.map((svc) => (
-          <Cell
-            key={svc.id}
-            title={svc.title}
-            subtitle={[duration(svc.duration_min), svc.description].filter(Boolean).join(" · ")}
-            after={<span className="price">{rub(svc.price, svc.price_from)}</span>}
-            onClick={() => p.onBook(svc.id)}
-            chevron
-          />
+/** Портфолио на весь экран: сетка, по тапу — фото крупно, листание стрелками/свайпом. */
+export function PortfolioScreen(p: { boot: Boot; onBack: () => void; onBook: () => void }) {
+  const b = p.boot.business!;
+  const photos = b.portfolio;
+  const [open, setOpen] = useState<number | null>(null);
+  const [touchX, setTouchX] = useState<number | null>(null);
+  const go = (d: number) => setOpen((i) => (i === null ? i : (i + d + photos.length) % photos.length));
+  return (
+    <div className="page">
+      <BackLink onBack={p.onBack} />
+      <h2 className="page-title">Портфолио</h2>
+      {!photos.length && <Empty title="Фото пока нет" />}
+      <div className="gallery gallery-grid">
+        {photos.map((ph, i) => (
+          <button key={ph.id} className="gallery-item" onClick={() => setOpen(i)}>
+            <img src={photoUrl(ph.id)} alt={ph.caption} loading="lazy" />
+          </button>
         ))}
-      </Section>
-
-      <Section>
-        <Cell title="🗂 Мои записи" onClick={p.onMy} chevron />
-      </Section>
-
-      <div className="footer-note">Онлайн-запись работает на платформе бесплатно</div>
-
-      {photo !== null && (
-        <div className="lightbox" onClick={() => setPhoto(null)}>
-          <img src={photoUrl(photo)} alt="" />
+      </div>
+      {open !== null && (
+        <div
+          className="lightbox"
+          onClick={() => setOpen(null)}
+          onTouchStart={(e) => setTouchX(e.touches[0].clientX)}
+          onTouchEnd={(e) => {
+            if (touchX === null) return;
+            const dx = e.changedTouches[0].clientX - touchX;
+            if (Math.abs(dx) > 40) {
+              e.stopPropagation();
+              go(dx < 0 ? 1 : -1);
+            }
+            setTouchX(null);
+          }}
+        >
+          <img src={photoUrl(photos[open].id)} alt={photos[open].caption} onClick={(e) => e.stopPropagation()} />
+          {photos.length > 1 && (
+            <>
+              <button className="lb-nav lb-prev" onClick={(e) => (e.stopPropagation(), go(-1))}>‹</button>
+              <button className="lb-nav lb-next" onClick={(e) => (e.stopPropagation(), go(1))}>›</button>
+              <div className="lb-count">
+                {open + 1} / {photos.length}
+              </div>
+            </>
+          )}
         </div>
       )}
-
-      <MainButton text="📅 Записаться" color={s.accent} onClick={() => p.onBook()} disabled={!b.services.length} />
+      <MainButton text="Записаться" color={b.settings.accent} onClick={p.onBook} disabled={!b.services.length} />
     </div>
   );
 }

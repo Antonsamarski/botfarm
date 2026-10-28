@@ -44,6 +44,9 @@ for (const [i, [tpl, name]] of demo.entries()) {
         bannerFileId: "demo-banner",
       },
     });
+    for (let k = 0; k < 6; k++) {
+      await db.query(`insert into portfolio (business_id, file_id, caption, sort) values ($1, $2, '', $3)`, [b.id, `demo-${k}`, k]);
+    }
   }
 }
 
